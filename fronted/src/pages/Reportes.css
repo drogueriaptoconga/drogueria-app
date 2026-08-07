@@ -1,0 +1,91 @@
+/* src/pages/Reportes.css */
+.reportes-container {
+  padding: 40px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+}
+
+.reportes-container h1 {
+  text-align: center;
+  margin-bottom: 40px;
+  font-size: 2.5rem;
+  color: #1e3a5f;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 15px;
+}
+
+.resumen-cards {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+
+.card {
+  width: 300px;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  color: #fff;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: rotate(45deg);
+  opacity: 0.2;
+}
+
+.card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.card h3 {
+  font-size: 1.4rem;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.monto {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* Colores de las tarjetas con gradientes */
+.ingresos-card {
+  background: linear-gradient(135deg, #11998e, #38ef7d);
+}
+
+.gastos-card {
+  background: linear-gradient(135deg, #e53935, #ef5350);
+}
+
+.ganancia-card {
+  background: linear-gradient(135deg, #2e3192, #1b3780);
+}
+
+.disclaimer {
+  text-align: center;
+  margin-top: 50px;
+  font-size: 0.9rem;
+  color: #6a737d;
+  font-style: italic;
+}
+
+.error-message {
+  color: #e53935;
+  font-weight: bold;
+}
