@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { resolveProductConflict } = require('./productosConflict');
 
 // Helper: margen en % según definición actual (porcentaje sobre el precio de venta)
 // margen = ((precio - costo) / precio) * 100
@@ -11,6 +12,15 @@ function calcMargin(costo, precio) {
         return parseFloat((((p - c) / p) * 100).toFixed(2));
     }
     return null;
+}
+
+async function getNextProductId() {
+    const result = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM productos');
+    return parseInt(result.rows[0].next_id, 10);
+}
+
+async function syncProductSequence(nextId) {
+    await db.query("SELECT setval(pg_get_serial_sequence('productos', 'id'), $1, true)", [nextId]);
 }
 
 // =============================================
@@ -213,7 +223,8 @@ router.post('/', async (req, res) => {
         vender_por_caja, unidades_por_caja, precio_por_caja,
         fecha_vencimiento, dias_alerta_vencimiento,
         venta_exclusiva_sobre, cantidad_solo_sobre, precio_solo_sobre,
-        venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja
+        venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja,
+        allowOverwrite = false
     } = req.body;
 
     // Validaciones básicas
@@ -222,13 +233,14 @@ router.post('/', async (req, res) => {
     }
 
     try {
-        // Verificar si el código ya existe
         const existingResult = await db.query(
-            'SELECT codigo_producto FROM productos WHERE codigo_producto = $1', 
+            'SELECT id, codigo_producto FROM productos WHERE codigo_producto = $1',
             [codigo_producto]
         );
-        
-        if (existingResult.rows.length > 0) {
+        const existingProduct = existingResult.rows[0];
+        const conflictDecision = resolveProductConflict(existingProduct, allowOverwrite);
+
+        if (conflictDecision.action === 'reject') {
             return res.status(409).json({ error: 'El código de producto ya existe' });
         }
 
@@ -260,23 +272,9 @@ router.post('/', async (req, res) => {
             m_solo_caja = calcMargin(costoSoloCaja, precio_solo_caja);
         }
 
-        const query = `
-            INSERT INTO productos (
-                codigo_producto, nombre, costo_unidad, precio_unidad, stock_total,
-                margen_porcentaje, stock_minimo_alerta, venta_por_unidad_habilitada,
-                vender_por_sobre, unidades_por_sobre, precio_por_sobre,
-                vender_por_caja, unidades_por_caja, precio_por_caja,
-                fecha_vencimiento, dias_alerta_vencimiento,
-                margen_sobre, margen_caja,
-                venta_exclusiva_sobre, cantidad_solo_sobre, precio_solo_sobre, margen_solo_sobre,
-                venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja, margen_solo_caja
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
-            RETURNING id
-        `;
-
         const values = [
             codigo_producto, nombre, costo_unidad, precio_unidad, stock_total,
-            m_unidad || null, stock_minimo_alerta || null, 
+            m_unidad || null, stock_minimo_alerta || null,
             venta_por_unidad_habilitada || false,
             vender_por_sobre || false, unidades_por_sobre || null, precio_por_sobre || null,
             vender_por_caja || false, unidades_por_caja || null, precio_por_caja || null,
@@ -286,11 +284,67 @@ router.post('/', async (req, res) => {
             venta_exclusiva_caja || false, cantidad_solo_caja || stock_total, precio_solo_caja || null, m_solo_caja || null
         ];
 
-        const result = await db.query(query, values);
-        
-        res.status(201).json({ 
-            message: 'Producto creado exitosamente', 
-            id: result.rows[0].id 
+        let result;
+        let message;
+        let statusCode;
+
+        if (conflictDecision.action === 'update') {
+            const updateQuery = `
+                UPDATE productos SET
+                    nombre = $1, costo_unidad = $2, precio_unidad = $3, stock_total = $4,
+                    margen_porcentaje = $5, stock_minimo_alerta = $6, venta_por_unidad_habilitada = $7,
+                    vender_por_sobre = $8, unidades_por_sobre = $9, precio_por_sobre = $10,
+                    vender_por_caja = $11, unidades_por_caja = $12, precio_por_caja = $13,
+                    fecha_vencimiento = $14, dias_alerta_vencimiento = $15,
+                    margen_sobre = $16, margen_caja = $17,
+                    venta_exclusiva_sobre = $18, cantidad_solo_sobre = $19, precio_solo_sobre = $20, margen_solo_sobre = $21,
+                    venta_exclusiva_caja = $22, cantidad_solo_caja = $23, precio_solo_caja = $24, margen_solo_caja = $25
+                WHERE id = $26
+                RETURNING id
+            `;
+
+            result = await db.query(updateQuery, [
+                nombre, costo_unidad, precio_unidad, stock_total,
+                m_unidad || null, stock_minimo_alerta || null,
+                venta_por_unidad_habilitada || false,
+                vender_por_sobre || false, unidades_por_sobre || null, precio_por_sobre || null,
+                vender_por_caja || false, unidades_por_caja || null, precio_por_caja || null,
+                fecha_vencimiento || null, dias_alerta_vencimiento || null,
+                m_sobre || null, m_caja || null,
+                venta_exclusiva_sobre || false, cantidad_solo_sobre || stock_total, precio_solo_sobre || null, m_solo_sobre || null,
+                venta_exclusiva_caja || false, cantidad_solo_caja || stock_total, precio_solo_caja || null, m_solo_caja || null,
+                existingProduct.id
+            ]);
+            message = 'Producto actualizado sobrescribiendo el existente';
+            statusCode = 200;
+        } else {
+            const nextId = await getNextProductId();
+            await syncProductSequence(nextId);
+
+            const insertQuery = `
+                INSERT INTO productos (
+                    id, codigo_producto, nombre, costo_unidad, precio_unidad, stock_total,
+                    margen_porcentaje, stock_minimo_alerta, venta_por_unidad_habilitada,
+                    vender_por_sobre, unidades_por_sobre, precio_por_sobre,
+                    vender_por_caja, unidades_por_caja, precio_por_caja,
+                    fecha_vencimiento, dias_alerta_vencimiento,
+                    margen_sobre, margen_caja,
+                    venta_exclusiva_sobre, cantidad_solo_sobre, precio_solo_sobre, margen_solo_sobre,
+                    venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja, margen_solo_caja
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+                RETURNING id
+            `;
+
+            const insertValues = [nextId, ...values];
+            result = await db.query(insertQuery, insertValues);
+            message = 'Producto creado exitosamente';
+            statusCode = 201;
+        }
+
+        res.status(statusCode).json({
+            message,
+            id: result.rows[0].id,
+            overwritten: conflictDecision.action === 'update'
         });
     } catch (err) {
         console.error('Error al crear el producto:', err);

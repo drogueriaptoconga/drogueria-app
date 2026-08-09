@@ -284,7 +284,8 @@ const useProductosLogic = () => {
     // =============================================
     // FUNCIÓN PRINCIPAL PARA GUARDAR PRODUCTO
     // =============================================
-    const handleSubmitInternal = async () => {
+    const handleSubmitInternal = async (options = {}) => {
+        const { overwriteExisting = false } = options;
         // Validaciones básicas
         if (!form.codigo_producto.trim()) {
             setFormMessage({ type: 'error', text: 'El código del producto es obligatorio.' });
@@ -379,9 +380,15 @@ const useProductosLogic = () => {
                 await fetchProductos('', showExpired, showWarning);
                 if (searchRef.current) searchRef.current.focus();
             } else {
-                const response = await axios.post('http://localhost:3001/api/productos', sanitizedForm);
+                const response = await axios.post('http://localhost:3001/api/productos', {
+                    ...sanitizedForm,
+                    allowOverwrite: overwriteExisting
+                });
+                const successMessage = overwriteExisting
+                    ? `Producto "${form.nombre}" actualizado sobrescribiendo el existente`
+                    : `Producto "${form.nombre}" creado exitosamente`;
                 setFormMessage({ type: 'success', text: response.data.message });
-                showGlobalMessage(`Producto "${form.nombre}" creado exitosamente`, 'success');
+                showGlobalMessage(successMessage, 'success');
                 await fetchProductos(searchTerm, showExpired, showWarning);
                 
                 const continueAdding = window.confirm("¡Producto guardado exitosamente! ¿Quieres agregar otro producto?");
@@ -454,7 +461,7 @@ const useProductosLogic = () => {
         if (response === 'modify') {
             handleEdit(productExistsModal.product);
         } else if (response === 'create' && (modalContext === 'create' || modalContext === 'blur')) {
-            await handleSubmitInternal();
+            await handleSubmitInternal({ overwriteExisting: true });
         } else if (response === 'cancel') {
             if (modalContext === 'search') {
                 setSearchTerm('');

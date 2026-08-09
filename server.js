@@ -12,7 +12,7 @@ const reportesRouter = require('./routes/reportes');
 const historialRouter = require('./routes/historial');
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 // Middlewares
 app.use(cors());

@@ -19,7 +19,7 @@ if (process.env.DATABASE_URL) {
     poolConfig.port = process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432;
     poolConfig.user = process.env.DB_USER || 'postgres';
     poolConfig.password = process.env.DB_PASSWORD || undefined;
-    poolConfig.database = process.env.DB_NAME || 'drogueria_db';
+    poolConfig.database = process.env.DB_NAME || 'drogueria_app';
     if (process.env.DB_SSL === 'true') {
         poolConfig.ssl = { rejectUnauthorized: false };
     }
