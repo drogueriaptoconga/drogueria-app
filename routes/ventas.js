@@ -25,11 +25,13 @@ function calcularDetalleVenta(producto, item) {
             break;
         case 'Solo Sobre':
             precioVentaPorItem = Number(producto.precio_solo_sobre) || 0;
-            unidadesADescontar = cantidadVendida * (Number(producto.cantidad_solo_sobre) || 0);
+            // En modo exclusivo por sobre, el stock se maneja en sobres, no en unidades internas.
+            unidadesADescontar = cantidadVendida;
             break;
         case 'Solo Caja':
             precioVentaPorItem = Number(producto.precio_solo_caja) || 0;
-            unidadesADescontar = cantidadVendida * (Number(producto.cantidad_solo_caja) || 0);
+            // En modo exclusivo por caja, el stock se maneja en cajas.
+            unidadesADescontar = cantidadVendida;
             break;
         default:
             throw new Error('Tipo de venta no válido');
@@ -169,9 +171,11 @@ router.put('/:id/anular', requireAdmin, async (req, res) => {
             } else if (item.tipo_venta === 'Caja') {
                 unidadesAReponer = item.cantidad_vendida * (item.unidades_por_caja || 0);
             } else if (item.tipo_venta === 'Solo Sobre') {
-                unidadesAReponer = item.cantidad_vendida * (item.cantidad_solo_sobre || 0);
+                // Reponer por sobres cuando la venta fue exclusiva por sobre
+                unidadesAReponer = item.cantidad_vendida;
             } else if (item.tipo_venta === 'Solo Caja') {
-                unidadesAReponer = item.cantidad_vendida * (item.cantidad_solo_caja || 0);
+                // Reponer por cajas cuando la venta fue exclusiva por caja
+                unidadesAReponer = item.cantidad_vendida;
             }
 
             if (unidadesAReponer > 0) {
