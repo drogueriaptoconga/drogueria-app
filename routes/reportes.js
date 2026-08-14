@@ -4,6 +4,40 @@ const router = express.Router();
 const db = require('../db');
 const { denyIfAsesor } = require('../middleware/roles');
 
+function calculateProfitMargin(gananciaBruta, totalIngresos) {
+    if (!Number.isFinite(gananciaBruta) || !Number.isFinite(totalIngresos) || totalIngresos <= 0) {
+        return 0;
+    }
+    return Number(((gananciaBruta / totalIngresos) * 100).toFixed(2));
+}
+
+function buildFinancialSummary({
+    totalIngresos = 0,
+    totalGastos = 0,
+    totalGanancia = 0,
+    totalInversionEntradas = 0,
+    totalCapitalInvertido = 0,
+}) {
+    const totalGananciaBruta = Number(totalGanancia) || 0;
+    const gananciaNeta = Number(totalGananciaBruta - totalGastos) || 0;
+    const porcentajeGananciaBruta = calculateProfitMargin(totalGananciaBruta, totalIngresos);
+    const porcentajeGananciaNeta = calculateProfitMargin(gananciaNeta, totalIngresos);
+
+    return {
+        totalIngresos: Number(totalIngresos) || 0,
+        totalGastos: Number(totalGastos) || 0,
+        totalGanancia: totalGananciaBruta,
+        totalGananciaBruta: totalGananciaBruta,
+        totalInversionEntradas: Number(totalInversionEntradas) || 0,
+        totalCapitalInvertido: Number(totalCapitalInvertido) || 0,
+        gananciaNeta,
+        porcentajeGananciaBruta,
+        porcentajeGananciaNeta,
+    };
+}
+
+router.buildFinancialSummary = buildFinancialSummary;
+
 // Ruta para obtener el reporte de ventas del día
 router.get('/ventas_diarias', denyIfAsesor, async (req, res) => {
     const query = `
@@ -159,28 +193,49 @@ router.get('/ventas_semana', denyIfAsesor, async (req, res) => {
     }
 });
 
-// RUTA AGREGADA PARA EL REPORTE FINANCIERO
 router.get('/resumen', denyIfAsesor, async (req, res) => {
     try {
-        const ingresosResult = await db.query('SELECT SUM(monto_total) AS total_ingresos FROM ventas WHERE COALESCE(anulado, false) = false');
-        const totalIngresos = parseFloat(ingresosResult.rows[0]?.total_ingresos) || 0;
+        const { startDate, endDate } = req.query;
+        const start = startDate || null;
+        const end = endDate || null;
 
-        const gastosResult = await db.query('SELECT SUM(monto) AS total_gastos FROM gastos');
-        const totalGastos = parseFloat(gastosResult.rows[0]?.total_gastos) || 0;
+        const whereClause = [];
+        const params = [];
 
-        const inversionResult = await db.query(`
-            SELECT SUM(cantidad_entrada * costo_unidad_entrada) AS total_inversion_entradas
-            FROM entradas_stock
-            WHERE COALESCE(anulado, false) = false
-        `);
-        const totalInversionEntradas = parseFloat(inversionResult.rows[0]?.total_inversion_entradas) || 0;
+        if (start) {
+            whereClause.push('v.fecha_venta >= $' + (params.length + 1));
+            params.push(`${start} 00:00:00`);
+        }
+        if (end) {
+            whereClause.push('v.fecha_venta <= $' + (params.length + 1));
+            params.push(`${end} 23:59:59`);
+        }
+
+        const whereSql = whereClause.length ? `AND ${whereClause.join(' AND ')}` : '';
+
+        const ingresosQuery = `
+            SELECT COALESCE(SUM(v.monto_total), 0) AS total_ingresos
+            FROM ventas v
+            WHERE COALESCE(v.anulado, false) = false ${whereSql}
+        `;
+
+        const gastosQuery = `
+            SELECT COALESCE(SUM(g.monto), 0) AS total_gastos
+            FROM gastos g
+            WHERE 1 = 1 ${start && end ? `AND g.fecha_gasto >= $1 AND g.fecha_gasto <= $2` : ''}
+        `;
+
+        const inversionQuery = `
+            SELECT COALESCE(SUM(e.cantidad_entrada * e.costo_unidad_entrada), 0) AS total_inversion_entradas
+            FROM entradas_stock e
+            WHERE COALESCE(e.anulado, false) = false ${start && end ? `AND e.fecha_entrada >= $1 AND e.fecha_entrada <= $2` : ''}
+        `;
 
         const capitalResult = await db.query('SELECT SUM(stock_total * costo_unidad) AS capital_invertido FROM productos');
         const totalCapitalInvertido = parseFloat(capitalResult.rows[0]?.capital_invertido) || 0;
 
-        // calcular ganancia total usando la misma fórmula que en historial
         const gananciaQuery = `
-            SELECT SUM((dv.precio_venta - (
+            SELECT COALESCE(SUM((dv.precio_venta - (
                 CASE dv.tipo_venta
                     WHEN 'Unidad' THEN COALESCE(p.costo_unidad, 0)
                     WHEN 'Sobre' THEN COALESCE(p.costo_unidad, 0) * COALESCE(p.unidades_por_sobre, 0)
@@ -189,27 +244,38 @@ router.get('/resumen', denyIfAsesor, async (req, res) => {
                     WHEN 'Solo Caja' THEN COALESCE(p.costo_unidad, 0) * COALESCE(p.cantidad_solo_caja, 0)
                     ELSE COALESCE(p.costo_unidad, 0)
                 END
-            )) * dv.cantidad_vendida) AS total_ganancia
+            )) * dv.cantidad_vendida), 0) AS total_ganancia
             FROM ventas v
             JOIN detalle_venta dv ON v.id = dv.venta_id
             JOIN productos p ON dv.producto_id = p.id
-            WHERE COALESCE(v.anulado, false) = false;
+            WHERE COALESCE(v.anulado, false) = false ${whereSql}
         `;
 
-        const gananciaResult = await db.query(gananciaQuery);
+        const ingresosParams = [...params];
+        const gastosParams = start && end ? [start + ' 00:00:00', end + ' 23:59:59'] : [];
+        const inversionParams = start && end ? [start + ' 00:00:00', end + ' 23:59:59'] : [];
+
+        const [ingresosResult, gastosResult, inversionResult, gananciaResult] = await Promise.all([
+            db.query(ingresosQuery, ingresosParams),
+            db.query(gastosQuery, gastosParams),
+            db.query(inversionQuery, inversionParams),
+            db.query(gananciaQuery, params)
+        ]);
+
+        const totalIngresos = parseFloat(ingresosResult.rows[0]?.total_ingresos) || 0;
+        const totalGastos = parseFloat(gastosResult.rows[0]?.total_gastos) || 0;
+        const totalInversionEntradas = parseFloat(inversionResult.rows[0]?.total_inversion_entradas) || 0;
         const totalGanancia = parseFloat(gananciaResult.rows[0]?.total_ganancia) || 0;
 
-        const gananciaNeta = totalGanancia - totalGastos;
-
-        res.json({
-            totalIngresos: totalIngresos,
-            totalGastos: totalGastos,
-            totalGanancia: totalGanancia,
-            totalGananciaBruta: totalGanancia,
-            totalInversionEntradas: totalInversionEntradas,
-            totalCapitalInvertido: totalCapitalInvertido,
-            gananciaNeta: gananciaNeta
+        const summary = buildFinancialSummary({
+            totalIngresos,
+            totalGastos,
+            totalGanancia,
+            totalInversionEntradas,
+            totalCapitalInvertido,
         });
+
+        res.json(summary);
     } catch (err) {
         console.error('Error al generar el reporte financiero:', err);
         res.status(500).json({ error: 'Error interno del servidor' });

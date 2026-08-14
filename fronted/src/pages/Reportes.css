@@ -1,36 +1,95 @@
 /* src/pages/Reportes.css */
 .reportes-container {
-  padding: 40px;
-  background-color: #f0f2f5;
+  padding: 40px 24px 60px;
+  background: linear-gradient(180deg, #f5f7fb 0%, #eef3f9 100%);
   min-height: 100vh;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: #333;
+  color: #1f2a37;
 }
 
 .reportes-container h1 {
   text-align: center;
-  margin-bottom: 40px;
-  font-size: 2.5rem;
-  color: #1e3a5f;
-  border-bottom: 2px solid #e0e0e0;
-  padding-bottom: 15px;
+  margin: 0 auto 24px;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  color: #102a43;
+  border-bottom: 2px solid #dfe7f1;
+  padding-bottom: 14px;
+  max-width: 1200px;
+}
+
+.filtros-panel {
+  max-width: 1200px;
+  margin: 0 auto 20px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 18px;
+  padding: 18px 20px;
+}
+
+.filtro-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.filtro-item label {
+  font-weight: 600;
+  color: #334155;
+}
+
+.filtro-item input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  background: #f8fafc;
+}
+
+.btn-aplicar {
+  border: none;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  border-radius: 10px;
+  padding: 11px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn-aplicar:hover {
+  opacity: 0.95;
+}
+
+.range-summary {
+  max-width: 1200px;
+  margin: 0 auto 18px;
+  text-align: right;
+  color: #475569;
+  font-weight: 600;
 }
 
 .resumen-cards {
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 30px;
+  gap: 24px;
 }
 
 .card {
-  width: 300px;
-  padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  width: min(100%, 260px);
+  min-height: 180px;
+  padding: 24px 20px;
+  border-radius: 18px;
+  box-shadow: 0 12px 18px rgba(15, 23, 42, 0.08);
   color: #fff;
   text-align: center;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
 }
@@ -38,54 +97,71 @@
 .card::before {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background-color: rgba(255, 255, 255, 0.1);
-  transform: rotate(45deg);
-  opacity: 0.2;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0));
 }
 
-.card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+.card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .card h3 {
-  font-size: 1.4rem;
-  margin-bottom: 10px;
-  font-weight: 500;
+  font-size: 1.1rem;
+  margin-bottom: 14px;
+  font-weight: 600;
 }
 
 .monto {
-  font-size: 3rem;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin: 0;
+  word-break: break-word;
 }
 
-/* Colores de las tarjetas con gradientes */
 .ingresos-card {
-  background: linear-gradient(135deg, #11998e, #38ef7d);
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
 }
 
 .gastos-card {
-  background: linear-gradient(135deg, #e53935, #ef5350);
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+}
+
+.ganancia-bruta-card {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
 }
 
 .ganancia-card {
-  background: linear-gradient(135deg, #2e3192, #1b3780);
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+}
+
+.porcentaje-ganancia-bruta-card,
+.porcentaje-ganancia-neta-card {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+}
+
+.inversion-card {
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+}
+
+.capital-card {
+  background: linear-gradient(135deg, #374151, #4b5563);
 }
 
 .disclaimer {
+  max-width: 1200px;
+  margin: 28px auto 0;
   text-align: center;
-  margin-top: 50px;
-  font-size: 0.9rem;
-  color: #6a737d;
-  font-style: italic;
+  font-size: 0.94rem;
+  color: #52607a;
+  background: rgba(255,255,255,0.6);
+  border-radius: 12px;
+  padding: 14px 18px;
 }
 
 .error-message {
-  color: #e53935;
+  color: #dc2626;
   font-weight: bold;
+  padding: 20px;
 }

@@ -152,9 +152,10 @@ router.post('/', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Validar datos numéricos recibidos
-        const cantidadNueva = Number(cantidad_entrada);
-        const nuevoCosto = Number(costo_unidad_entrada);
+            // 1. Validar y normalizar datos numéricos recibidos
+            const cantidadNueva = Number(cantidad_entrada);
+            const nuevoCosto = Number(costo_unidad_entrada);
+            const productoIdNum = Number(producto_id);
         if (!Number.isInteger(cantidadNueva) || cantidadNueva <= 0) {
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'La cantidad de entrada debe ser un número entero positivo' });
@@ -167,7 +168,7 @@ router.post('/', async (req, res) => {
         // 2. Obtener información actual del producto con bloqueo de fila
         const productResult = await client.query(
             `SELECT * FROM productos WHERE id = $1 FOR UPDATE`, 
-            [producto_id]
+            [productoIdNum]
         );
 
         if (productResult.rows.length === 0) {
@@ -251,48 +252,54 @@ router.post('/', async (req, res) => {
         // 5. Registrar la entrada en el historial - ✅ SIN ID duplicado
         const siguienteId = await sincronizarSecuenciaId(client, 'entradas_stock', 'id');
 
+        // Nota: algunas bases de datos pueden no tener la columna `fecha_vencimiento` en `entradas_stock`.
+        // Para evitar errores en esquemas antiguos, no almacenamos `fecha_vencimiento` aquí.
         const entradaQuery = siguienteId
             ? `
                 INSERT INTO entradas_stock 
-                (id, producto_id, cantidad_entrada, fecha_entrada, costo_unidad_entrada, fecha_vencimiento, usuario_id, costo_anterior, costo_nuevo) 
-                VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7, $8)
+                (id, producto_id, cantidad_entrada, fecha_entrada, costo_unidad_entrada, usuario_id, costo_anterior, costo_nuevo) 
+                VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)
                 RETURNING id
             `
             : `
                 INSERT INTO entradas_stock 
-                (producto_id, cantidad_entrada, fecha_entrada, costo_unidad_entrada, fecha_vencimiento, usuario_id, costo_anterior, costo_nuevo) 
-                VALUES ($1, $2, NOW(), $3, $4, $5, $6, $7)
+                (producto_id, cantidad_entrada, fecha_entrada, costo_unidad_entrada, usuario_id, costo_anterior, costo_nuevo) 
+                VALUES ($1, $2, NOW(), $3, $4, $5, $6)
                 RETURNING id
             `;
 
+        // Usar valores normalizados (números) en los parámetros
         const entradaParams = siguienteId
-            ? [siguienteId, producto_id, cantidad_entrada, nuevoCosto, fecha_vencimiento, usuario_id, costoAnterior, costoPromedioFinal]
-            : [producto_id, cantidad_entrada, nuevoCosto, fecha_vencimiento, usuario_id, costoAnterior, costoPromedioFinal];
+            ? [siguienteId, productoIdNum, cantidadNueva, nuevoCosto, usuario_id, costoAnterior, costoPromedioFinal]
+            : [productoIdNum, cantidadNueva, nuevoCosto, usuario_id, costoAnterior, costoPromedioFinal];
+
+        // Log de depuración para identificar errores en caso de fallo
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('📥 Ejecutando entradaQuery ->', entradaQuery.trim());
+            console.log('📥 Parametros:', entradaParams);
+        }
         
         const entradaResult = await client.query(entradaQuery, entradaParams);
 
-        // 6. Actualizar el producto con los nuevos valores
-        const updateProductoQuery = `
-            UPDATE productos 
-            SET 
-                stock_total = $1, 
-                costo_unidad = $2, 
-                precio_unidad = $3,
-                precio_por_sobre = $4,
-                precio_por_caja = $5,
-                precio_solo_sobre = $6,
-                precio_solo_caja = $7,
-                margen_porcentaje = $8,
-                margen_sobre = $9,
-                margen_caja = $10,
-                margen_solo_sobre = $11,
-                margen_solo_caja = $12,
-                fecha_ultima_entrada = NOW()
-            WHERE id = $13
-        `;
-        
-        await client.query(updateProductoQuery, [
-            nuevoStock, 
+        // 6. Actualizar el producto con los nuevos valores (incluir fecha_vencimiento si fue proporcionada)
+        const updateFields = [
+            'stock_total = $1',
+            'costo_unidad = $2',
+            'precio_unidad = $3',
+            'precio_por_sobre = $4',
+            'precio_por_caja = $5',
+            'precio_solo_sobre = $6',
+            'precio_solo_caja = $7',
+            'margen_porcentaje = $8',
+            'margen_sobre = $9',
+            'margen_caja = $10',
+            'margen_solo_sobre = $11',
+            'margen_solo_caja = $12',
+            'fecha_ultima_entrada = NOW()'
+        ];
+
+        const updateParams = [
+            nuevoStock,
             costoPromedioFinal,
             nuevoPrecioUnidad,
             nuevoPrecioSobre,
@@ -303,9 +310,23 @@ router.post('/', async (req, res) => {
             nuevoMargenSobre,
             nuevoMargenCaja,
             nuevoMargenSoloSobre,
-            nuevoMargenSoloCaja,
-            producto_id
-        ]);
+            nuevoMargenSoloCaja
+        ];
+
+        if (fecha_vencimiento) {
+            updateFields.splice(updateFields.length - 1, 0, 'fecha_vencimiento = $13');
+            // Insert fecha_vencimiento before fecha_ultima_entrada position
+            updateParams.push(fecha_vencimiento);
+            // producto id will be param 14
+            updateParams.push(productoIdNum);
+            const updateProductoQuery = `UPDATE productos SET ${updateFields.join(', ')} WHERE id = $${updateParams.length}`;
+            await client.query(updateProductoQuery, updateParams);
+        } else {
+            // producto id will be param 13
+            updateParams.push(productoIdNum);
+            const updateProductoQuery = `UPDATE productos SET ${updateFields.join(', ')} WHERE id = $${updateParams.length}`;
+            await client.query(updateProductoQuery, updateParams);
+        }
 
         await client.query('COMMIT');
 
@@ -317,7 +338,7 @@ router.post('/', async (req, res) => {
                 stock_nuevo: nuevoStock,
                 costo_anterior: costoAnterior,
                 costo_nuevo: nuevoCosto,
-                inversion_total: cantidad_entrada * nuevoCosto,
+                inversion_total: cantidadNueva * nuevoCosto,
                 entrada_id: entradaResult.rows[0].id
             }
         };
@@ -353,9 +374,13 @@ router.post('/', async (req, res) => {
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Error en la transacción:', error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error(error.stack);
+        }
+        const detalle = process.env.NODE_ENV !== 'production' ? (error.message || String(error)) : 'Error interno';
         res.status(500).json({ 
             error: 'Error interno del servidor al registrar entrada', 
-            detalle: error.message
+            detalle
         });
     } finally {
         client.release();

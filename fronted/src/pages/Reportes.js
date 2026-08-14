@@ -4,7 +4,43 @@ import axios from 'axios';
 import './Reportes.css';
 import { getCurrentUser, getAuthHeaders } from '../auth';
 
+const formatCurrency = (value) => {
+    const numericValue = Number(value) || 0;
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        maximumFractionDigits: 0,
+    }).format(numericValue);
+};
+
+const formatDate = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('es-CO', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date);
+};
+
+const getDefaultDates = () => {
+    const today = new Date();
+    const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    return {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+    };
+};
+
 const Reportes = () => {
+    const defaultDates = getDefaultDates();
+    const [filters, setFilters] = useState({
+        startDate: defaultDates.startDate,
+        endDate: defaultDates.endDate,
+    });
     const [resumen, setResumen] = useState({
         totalIngresos: 0,
         totalGastos: 0,
@@ -12,60 +48,61 @@ const Reportes = () => {
         totalInversionEntradas: 0,
         totalCapitalInvertido: 0,
         gananciaNeta: 0,
-        ventasDelDia: 0,
-        ventasEfectivo: 0,
-        ventasTransferencia: 0,
         porcentajeGananciaBruta: 0,
         porcentajeGananciaNeta: 0,
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    useEffect(() => {
-        const fetchResumen = async () => {
-            try {
-                const [resumenResponse, gananciaDiariaResponse, ventasResponse] = await Promise.all([
-                    axios.get('http://localhost:3001/api/reportes/resumen', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/ganancia_diaria', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/ventas_diarias', { headers: getAuthHeaders() })
-                ]);
-                const data = resumenResponse.data;
-                const gananciasData = gananciaDiariaResponse.data;
-                const ventasData = ventasResponse.data;
-                const totalIngresos = parseFloat(data.totalIngresos) || 0;
-                const totalGastos = parseFloat(data.totalGastos) || 0;
-                const totalGananciaBruta = parseFloat(data.totalGananciaBruta) || 0;
-                const totalInversionEntradas = parseFloat(data.totalInversionEntradas) || 0;
-                const totalCapitalInvertido = parseFloat(data.totalCapitalInvertido) || 0;
-                const gananciaNeta = parseFloat(data.gananciaNeta) || 0;
-                const ventasDelDia = parseFloat(ventasData.ventas_diarias) || 0;
-                const ventasEfectivo = parseFloat(ventasData.ventas_efectivo) || 0;
-                const ventasTransferencia = parseFloat(ventasData.ventas_transferencia) || 0;
-                const porcentajeGananciaBruta = parseFloat(gananciasData.porcentaje_ganancia_bruta) || 0;
-                const porcentajeGananciaNeta = parseFloat(gananciasData.porcentaje_ganancia_neta) || 0;
+    const fetchResumen = async (nextFilters = filters) => {
+        setLoading(true);
+        setError(null);
 
-                setResumen({
-                    totalIngresos,
-                    totalGastos,
-                    totalGananciaBruta,
-                    totalInversionEntradas,
-                    totalCapitalInvertido,
-                    gananciaNeta,
-                    ventasDelDia,
-                    ventasEfectivo,
-                    ventasTransferencia,
-                    porcentajeGananciaBruta,
-                    porcentajeGananciaNeta,
-                });
-            } catch (err) {
-                setError('Error al cargar el reporte financiero. Por favor, intente de nuevo.');
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchResumen();
+        try {
+            const params = new URLSearchParams();
+            if (nextFilters.startDate) params.append('startDate', nextFilters.startDate);
+            if (nextFilters.endDate) params.append('endDate', nextFilters.endDate);
+
+            const response = await axios.get(`http://localhost:3001/api/reportes/resumen?${params.toString()}`, {
+                headers: getAuthHeaders(),
+            });
+
+            const data = response.data || {};
+            setResumen({
+                totalIngresos: Number(data.totalIngresos) || 0,
+                totalGastos: Number(data.totalGastos) || 0,
+                totalGananciaBruta: Number(data.totalGananciaBruta) || 0,
+                totalInversionEntradas: Number(data.totalInversionEntradas) || 0,
+                totalCapitalInvertido: Number(data.totalCapitalInvertido) || 0,
+                gananciaNeta: Number(data.gananciaNeta) || 0,
+                porcentajeGananciaBruta: Number(data.porcentajeGananciaBruta) || 0,
+                porcentajeGananciaNeta: Number(data.porcentajeGananciaNeta) || 0,
+            });
+        } catch (err) {
+            setError('Error al cargar el reporte financiero. Por favor, intente de nuevo.');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchResumen(filters);
     }, []);
+
+    const handleFilterChange = (event) => {
+        const { name, value } = event.target;
+        setFilters((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleApplyFilters = () => {
+        if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+            setError('La fecha de inicio no puede ser mayor que la fecha final.');
+            return;
+        }
+
+        fetchResumen(filters);
+    };
 
     const currentUser = getCurrentUser();
     if ((currentUser.role || '').toLowerCase() === 'asesor') {
@@ -83,54 +120,74 @@ const Reportes = () => {
     return (
         <div className="reportes-container">
             <h1>Reporte Financiero</h1>
+
+            <div className="filtros-panel">
+                <div className="filtro-item">
+                    <label htmlFor="startDate">Fecha inicio</label>
+                    <input
+                        id="startDate"
+                        type="date"
+                        name="startDate"
+                        value={filters.startDate}
+                        onChange={handleFilterChange}
+                    />
+                </div>
+                <div className="filtro-item">
+                    <label htmlFor="endDate">Fecha fin</label>
+                    <input
+                        id="endDate"
+                        type="date"
+                        name="endDate"
+                        value={filters.endDate}
+                        onChange={handleFilterChange}
+                    />
+                </div>
+                <button type="button" className="btn-aplicar" onClick={handleApplyFilters}>
+                    Aplicar filtros
+                </button>
+            </div>
+
+            <div className="range-summary">
+                <span>Periodo: {formatDate(filters.startDate)} - {formatDate(filters.endDate)}</span>
+            </div>
+
             <div className="resumen-cards">
                 <div className="card ingresos-card">
-                    <h3>Ingresos Totales</h3>
-                    <p className="monto">${resumen.totalIngresos}</p>
+                    <h3>Ingresos</h3>
+                    <p className="monto">{formatCurrency(resumen.totalIngresos)}</p>
                 </div>
                 <div className="card gastos-card">
-                    <h3>Gastos Totales</h3>
-                    <p className="monto">${resumen.totalGastos}</p>
+                    <h3>Gastos</h3>
+                    <p className="monto">{formatCurrency(resumen.totalGastos)}</p>
                 </div>
                 <div className="card ganancia-bruta-card">
                     <h3>Ganancia Bruta</h3>
-                    <p className="monto">${resumen.totalGananciaBruta}</p>
-                </div>
-                <div className="card ventas-dia-card">
-                    <h3>Ventas del Día</h3>
-                    <p className="monto">${resumen.ventasDelDia}</p>
-                </div>
-                <div className="card ventas-efectivo-card">
-                    <h3>Ventas Efectivo</h3>
-                    <p className="monto">${resumen.ventasEfectivo}</p>
-                </div>
-                <div className="card ventas-transferencia-card">
-                    <h3>Ventas Transferencia</h3>
-                    <p className="monto">${resumen.ventasTransferencia}</p>
+                    <p className="monto">{formatCurrency(resumen.totalGananciaBruta)}</p>
                 </div>
                 <div className="card porcentaje-ganancia-bruta-card">
-                    <h3>Margen Bruto Diario</h3>
+                    <h3>Margen Bruto</h3>
                     <p className="monto">{resumen.porcentajeGananciaBruta}%</p>
-                </div>
-                <div className="card porcentaje-ganancia-neta-card">
-                    <h3>Margen Neto Diario</h3>
-                    <p className="monto">{resumen.porcentajeGananciaNeta}%</p>
-                </div>
-                <div className="card inversion-card">
-                    <h3>Inversión en Entradas</h3>
-                    <p className="monto">${resumen.totalInversionEntradas}</p>
-                </div>
-                <div className="card capital-card">
-                    <h3>Capital Invertido</h3>
-                    <p className="monto">${resumen.totalCapitalInvertido}</p>
                 </div>
                 <div className="card ganancia-card">
                     <h3>Ganancia Neta</h3>
-                    <p className="monto">${resumen.gananciaNeta}</p>
+                    <p className="monto">{formatCurrency(resumen.gananciaNeta)}</p>
+                </div>
+                <div className="card porcentaje-ganancia-neta-card">
+                    <h3>Margen Neto</h3>
+                    <p className="monto">{resumen.porcentajeGananciaNeta}%</p>
+                </div>
+                <div className="card inversion-card">
+                    <h3>Inversión en entradas</h3>
+                    <p className="monto">{formatCurrency(resumen.totalInversionEntradas)}</p>
+                </div>
+                <div className="card capital-card">
+                    <h3>Capital invertido</h3>
+                    <p className="monto">{formatCurrency(resumen.totalCapitalInvertido)}</p>
                 </div>
             </div>
+
             <div className="disclaimer">
-                <p>Nota: Los montos se calculan a partir de los datos registrados en los módulos de ventas y gastos.</p>
+                <p>Los valores mostrados corresponden al rango seleccionado y se calculan con la información real de ventas, gastos y entradas registradas.</p>
             </div>
         </div>
     );
