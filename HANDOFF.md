@@ -386,3 +386,37 @@ Copia este bloque al final del archivo y complétalo:
 - Clic visual en el navegador; el cambio es solo de estilos y el build pasó.
 
 **Siguiente paso:** refrescar con Ctrl+F5. El botón **“Cerrar sesión”** debe quedar al final de la barra, con borde rojo.
+
+### 2026-11-08 — DeepSeek V4.1 Flash — Actualización manual desde el escritorio (sin tarea cada 5 min)
+
+**Objetivo:** reemplazar la tarea automática cada 5 minutos por una actualización manual controlada, para no reiniciar el backend en horario de venta.
+
+**Cambios:**
+- `scripts/auto-deploy.js`: actualización por sondeo manual; pull `--ff-only`, validación de sintaxis, dependencias, migraciones, build, tests, preflight en el puerto 3002 y reinicio del backend en el 3001. Soporta `--force-restart`.
+- `scripts/actualizar-app.bat`: wrapper con confirmación S/N, ejecuta el deploy y pausa al final.
+- `scripts/auto-deploy.bat`: wrapper para una eventual tarea programada (no se usa por ahora).
+- Escritorio: `C:\Users\drogu\OneDrive\Desktop\Actualizar Drogueria App.bat`.
+- `package.json`: script `deploy:auto`.
+- `SETUP.md` y `README.md`: documentan la actualización manual.
+- `fronted/src/pages/Dashboard.js`: commit aparte que quita tres KPIs de ganancia bruta que ya estaban modificados en el working tree.
+
+**Commits:**
+- `9c0dd85` — auto-deploy por sondeo de Git.
+- `f753c59` — limpieza de KPIs del dashboard.
+
+**Validaciones:**
+- `node scripts/auto-deploy.js` sin cambios → “Sin cambios”.
+- `node scripts/auto-deploy.js --force-restart` → preflight 3002 OK, backend 3001 reiniciado y `/api/test` responde.
+- La tarea `Drogueria - Auto Deploy` fue eliminada.
+- La tarea diaria `Drogueria - Respaldo Supabase` sigue habilitada a las 23:00.
+
+**Sin probar:**
+- El `.bat` del escritorio con un commit real desde la máquina de desarrollo.
+
+**Riesgos / notas:**
+- El `.bat` reinicia el backend solo si hay cambios de backend; la sesión se cierra.
+- No ejecutarlo en medio de una venta.
+- Si falla la validación/build/tests antes del reinicio, el backend anterior sigue corriendo.
+- El sync de datos no se ejecuta desde el `.bat`; sigue la tarea diaria.
+
+**Siguiente paso:** probar el `.bat` del escritorio con un commit nuevo desde la máquina de desarrollo.

@@ -66,6 +66,12 @@ cd fronted
 npm start
 ```
 
+## Actualizar producción
+
+En la máquina de producción, doble clic en **`Actualizar Drogueria App`** del escritorio
+(o ejecuta `scripts\actualizar-app.bat`). Revisa `origin/main`, aplica los cambios y reinicia
+el backend solo si hace falta. No lo ejecutes en medio de una venta.
+
 ## Base de datos y Supabase
 
 - La app usa el PostgreSQL local por defecto.
