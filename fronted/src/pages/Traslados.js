@@ -3,7 +3,7 @@ import axios from 'axios';
 import './Traslados.css';
 import { getCurrentUser, getAuthHeaders } from '../auth';
 
-const API_BASE = 'http://localhost:3001';
+import API_BASE from '../api';
 
 const formatCurrency = (value) => {
     const numericValue = Number(value) || 0;

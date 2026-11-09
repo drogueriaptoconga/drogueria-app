@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './EntradasStock.css';
@@ -52,7 +53,7 @@ const EntradasStock = () => {
         
         if (query.length > 2) {
             try {
-                const response = await axios.get(`http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}`);
+                const response = await axios.get(`${API_BASE}/api/entradas/buscar?query=${encodeURIComponent(query)}`);
                 if (requestId === searchRequestIdRef.current) {
                     setSearchResults(response.data);
                 }
@@ -76,7 +77,7 @@ const EntradasStock = () => {
         const requestId = ++searchRequestIdRef.current;
         try {
             const exactResponse = await axios.get(
-                `http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}&codigo_exacto=true`
+                `${API_BASE}/api/entradas/buscar?query=${encodeURIComponent(query)}&codigo_exacto=true`
             );
             if (requestId !== searchRequestIdRef.current) return;
 
@@ -92,7 +93,7 @@ const EntradasStock = () => {
             }
 
             const searchResponse = await axios.get(
-                `http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}`
+                `${API_BASE}/api/entradas/buscar?query=${encodeURIComponent(query)}`
             );
             if (requestId === searchRequestIdRef.current) {
                 setSearchResults(searchResponse.data);
@@ -345,7 +346,7 @@ const EntradasStock = () => {
                 fecha_vencimiento: form.fecha_vencimiento || null
             };
 
-            const response = await axios.post('http://localhost:3001/api/entradas', entradaData);
+            const response = await axios.post(`${API_BASE}/api/entradas`, entradaData);
             
             setMensaje({ 
                 tipo: 'success', 
@@ -389,7 +390,7 @@ const EntradasStock = () => {
                 ...filtros
             });
 
-            const response = await axios.get(`http://localhost:3001/api/entradas/historial?${params}`);
+            const response = await axios.get(`${API_BASE}/api/entradas/historial?${params}`);
             setHistorial(response.data.entradas);
             setPaginacion(response.data.paginacion);
         } catch (error) {
@@ -400,7 +401,7 @@ const EntradasStock = () => {
     // Cargar estadísticas
     const cargarEstadisticas = async () => {
         try {
-            const response = await axios.get('http://localhost:3001/api/entradas/estadisticas');
+            const response = await axios.get(`${API_BASE}/api/entradas/estadisticas`);
             setEstadisticas(response.data);
         } catch (error) {
             console.error('Error al cargar estadísticas:', error);

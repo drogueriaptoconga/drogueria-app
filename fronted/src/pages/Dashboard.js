@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 // src/pages/Dashboard.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -29,43 +30,48 @@ const Dashboard = () => {
 
     useEffect(() => {
         const fetchData = async () => {
-            try {
-                const [
-                    ventasResponse,
-                    gananciaDiariaResponse,
-                    ventasSemanaResponse,
-                    promedioMensualResponse
-                ] = await Promise.all([
-                    axios.get('http://localhost:3001/api/reportes/ventas_diarias', {
-                        params: {
-                            fecha: selectedDate,
-                            ...(selectedPaymentMethod ? { metodo_pago: selectedPaymentMethod } : {})
-                        },
-                        headers: getAuthHeaders()
-                    }),
-                    axios.get('http://localhost:3001/api/reportes/ganancia_diaria', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/ventas_semana', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/promedio_mensual', { headers: getAuthHeaders() })
-                ]);
+            setLoading(true);
+            setError(null);
+            const headers = getAuthHeaders();
+            const params = {
+                fecha: selectedDate,
+                ...(selectedPaymentMethod ? { metodo_pago: selectedPaymentMethod } : {})
+            };
 
-                setDashboardData({
-                    ventasDelDia: parseFloat(ventasResponse.data.ventas_diarias) || 0,
-                    ventasEfectivo: parseFloat(ventasResponse.data.ventas_efectivo) || 0,
-                    ventasTransferencia: parseFloat(ventasResponse.data.ventas_transferencia) || 0,
-                    ventasMixto: parseFloat(ventasResponse.data.ventas_mixto) || 0,
-                    porcentajeTransferencia: parseFloat(ventasResponse.data.porcentaje_transferencia) || 0,
-                    promedioMensual: parseFloat(promedioMensualResponse.data.promedio_mensual) || 0,
-                    promedioDiaConVenta: parseFloat(promedioMensualResponse.data.promedio_dia_con_venta) || 0,
-                    gastosDiarios: parseFloat(gananciaDiariaResponse.data.gastos_diarios) || 0,
-                    gananciaNetaDiaria: parseFloat(gananciaDiariaResponse.data.ganancia_neta_diaria) || 0,
-                    ventasSemana: ventasSemanaResponse.data
-                });
-                setLoading(false);
-            } catch (err) {
-                console.error('Error al cargar datos del dashboard:', err);
-                setError('Error al cargar datos del dashboard. Por favor, intente de nuevo.');
-                setLoading(false);
+            const [ventasRes, gananciaRes, semanaRes, promedioRes] = await Promise.allSettled([
+                axios.get(`${API_BASE}/api/reportes/ventas_diarias`, { params, headers }),
+                axios.get(`${API_BASE}/api/reportes/ganancia_diaria`, { headers }),
+                axios.get(`${API_BASE}/api/reportes/ventas_semana`, { headers }),
+                axios.get(`${API_BASE}/api/reportes/promedio_mensual`, { headers })
+            ]);
+
+            const ventasData = ventasRes.status === 'fulfilled' ? (ventasRes.value.data || {}) : {};
+            const gananciaData = gananciaRes.status === 'fulfilled' ? (gananciaRes.value.data || {}) : {};
+            const semanaData = semanaRes.status === 'fulfilled' ? (semanaRes.value.data || []) : [];
+            const promedioData = promedioRes.status === 'fulfilled' ? (promedioRes.value.data || {}) : {};
+
+            setDashboardData((prev) => ({
+                ...prev,
+                ventasDelDia: parseFloat(ventasData.ventas_diarias) || 0,
+                ventasEfectivo: parseFloat(ventasData.ventas_efectivo) || 0,
+                ventasTransferencia: parseFloat(ventasData.ventas_transferencia) || 0,
+                ventasMixto: parseFloat(ventasData.ventas_mixto) || 0,
+                porcentajeTransferencia: parseFloat(ventasData.porcentaje_transferencia) || 0,
+                promedioMensual: parseFloat(promedioData.promedio_mensual) || 0,
+                promedioDiaConVenta: parseFloat(promedioData.promedio_dia_con_venta) || 0,
+                gastosDiarios: parseFloat(gananciaData.gastos_diarios) || 0,
+                gananciaNetaDiaria: parseFloat(gananciaData.ganancia_neta_diaria) || 0,
+                ventasSemana: Array.isArray(semanaData) ? semanaData : []
+            }));
+
+            const failed = [ventasRes, gananciaRes, semanaRes, promedioRes].filter((r) => r.status === 'rejected');
+            if (failed.length > 0) {
+                console.error('Errores al cargar datos del dashboard:', failed.map((r) => r.reason?.message || r.reason));
+                if (failed.length === 4) {
+                    setError('Error al cargar datos del dashboard. Por favor, intente de nuevo.');
+                }
             }
+            setLoading(false);
         };
         fetchData();
     }, [selectedDate, selectedPaymentMethod]);

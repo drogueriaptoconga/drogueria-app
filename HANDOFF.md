@@ -525,3 +525,38 @@ Copia este bloque al final del archivo y complétalo:
 - La hora se interpreta en zona `America/Bogota`; rangos que cruzan medianoche se soportan con la lógica de envoltura.
 
 **Siguiente paso:** probar en navegador como Admin; si se quiere, permitir que el vendedor consulte sus propias ventas.
+---
+
+### 2026-11-09 â€” OpenCode (Beam) â€” Correcciones por reporte de producciÃ³n (Conga)
+
+**Objetivo:** atender reporte de la mÃ¡quina de producciÃ³n: dashboard no mostraba datos (cerrar caja) y opciÃ³n de editar productos "desaparecida". Aplicar correcciones robustas y preparar para enviar a producciÃ³n.
+
+**Reporte original (Conga):**
+- Dashboard: error al cargar datos; no mostraba ventas del dÃ­a ni permitÃ­a cerrar caja.
+- Productos: se eliminÃ³ la opciÃ³n de editar; se pidiÃ³ dejar las opciones al lado del Estado.
+
+**AnÃ¡lisis realizado:**
+- Se verificaron los 4 endpoints del Dashboard (`ventas_diarias`, `ganancia_diaria`, `ventas_semana`, `promedio_mensual`) en la BD local con un usuario admin de prueba: todos responden 200. Las queries SQL funcionan.
+- El Dashboard usaba `Promise.all`: si un solo endpoint fallaba, **todo** el dashboard fallaba y mostraba "Error al cargar datos".
+- La opciÃ³n "Editar/Eliminar" en ProductTable ya existÃ­a para admin, pero estaba en una columna separada al final de la tabla (scroll horizontal), lo que la hacÃ­a difÃ­cil de ver.
+
+**Cambios:**
+- `fronted/src/pages/Dashboard.js`: se reemplazÃ³ `Promise.all` por `Promise.allSettled`. Ahora cada KPI se carga de forma independiente: si un endpoint falla, los demÃ¡s se muestran y solo se muestra error si **todos** fallan.
+- `fronted/src/pages/ProductTable.js`: los botones "Editar" y "Eliminar" se movieron a la celda de "Estado" (columna "Estado / Acciones"), para que estÃ©n visibles sin scroll horizontal. Se eliminÃ³ la columna "Acciones" separada.
+- Se creÃ³ un usuario admin de prueba para validar los endpoints; se borrÃ³ despuÃ©s. No se modificaron datos reales.
+
+**Comandos ejecutados:**
+- `npm run build` (frontend) â†’ OK (solo warnings preexistentes).
+- `npm test` (backend) â†’ 27/27 OK.
+- Endpoints del Dashboard probados con token admin â†’ 200 en los 4.
+
+**Sin probar:**
+- VerificaciÃ³n visual en navegador (frontend arrancado en http://localhost:3000).
+- Prueba con la clienta en producciÃ³n (pendiente de enviar cambios).
+
+**Riesgos / notas:**
+- La causa raÃ­z del fallo en producciÃ³n puede ser: (a) la clienta logueada como vendedor (Dashboard es solo admin), (b) un error de red/CORS si la app estÃ¡ expuesta por tÃºnel, o (c) un endpoint que falla por datos especÃ­ficos de producciÃ³n. La correcciÃ³n de robustez (Promise.allSettled) mitiga el caso (c).
+- La columna "Acciones" ahora estÃ¡ junto a "Estado", mÃ¡s visible.
+
+**Siguiente paso:** enviar los cambios a producciÃ³n vÃ­a Git (`git add/commit/push`), luego en producciÃ³n hacer `git pull`, `npm install` si cambiÃ³ package.json, reiniciar backend/frontend. Probar con la clienta.
+'

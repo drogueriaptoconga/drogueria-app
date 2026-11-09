@@ -35,7 +35,10 @@ async function syncDatabaseSequences() {
 }
 
 // Middlewares
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : ['http://localhost:3000'];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 app.get('/api/test', (req, res) => {

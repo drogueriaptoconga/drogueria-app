@@ -64,8 +64,7 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
                             {canManage && <th>Margen S.</th>}
                             {canManage && <th>Margen C.</th>}
                             <th>Fecha Venc.</th>
-                            <th>Estado</th>
-                            {canManage && <th>Acciones</th>}
+                            <th>Estado / Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -100,23 +99,28 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
                                     {canManage && <td>{producto.margen_sobre ? `${parseFloat(producto.margen_sobre).toFixed(1)}%` : 'N/A'}</td>}
                                     {canManage && <td>{producto.margen_caja ? `${parseFloat(producto.margen_caja).toFixed(1)}%` : 'N/A'}</td>}
                                     <td>{formatDate(producto.fecha_vencimiento)}</td>
-                                    <td>{renderExpirationStatus(producto)}</td>
-                                    {canManage && <td>
-                                        <button 
-                                            className="edit-button" 
-                                            onClick={() => handleEdit(producto)}
-                                            disabled={isLoading}
-                                        >
-                                            Editar
-                                        </button>
-                                        <button 
-                                            className="delete-button" 
-                                            onClick={() => handleDelete(producto.id, producto.nombre)}
-                                            disabled={isLoading}
-                                        >
-                                            Eliminar
-                                        </button>
-                                    </td>}
+                                    <td>
+                                        {renderExpirationStatus(producto)}
+                                        {canManage && (
+                                            <div className="product-actions-inline" style={{ marginTop: '4px' }}>
+                                                <button
+                                                    className="edit-button"
+                                                    onClick={() => handleEdit(producto)}
+                                                    disabled={isLoading}
+                                                    style={{ marginRight: '4px' }}
+                                                >
+                                                    Editar
+                                                </button>
+                                                <button
+                                                    className="delete-button"
+                                                    onClick={() => handleDelete(producto.id, producto.nombre)}
+                                                    disabled={isLoading}
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
                                 </tr>
                             );
                         })}

@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { getCurrentUser, getAuthHeaders } from '../auth';
@@ -25,7 +26,7 @@ const VentasPorVendedor = () => {
             if (paymentMethod) params.metodo_pago = paymentMethod;
             if (vendedorFilter) params.usuario_id = vendedorFilter;
 
-            const res = await axios.get('http://localhost:3001/api/reportes/ventas_por_vendedor', { params, headers: getAuthHeaders() });
+            const res = await axios.get(`${API_BASE}/api/reportes/ventas_por_vendedor`, { params, headers: getAuthHeaders() });
             setRows(res.data.vendedores || []);
             setTotales(res.data.totales || { cantidad_ventas: 0, monto_total: 0, ganancia_total: 0 });
         } catch (error) {
@@ -41,7 +42,7 @@ const VentasPorVendedor = () => {
     useEffect(() => {
         const loadVendedores = async () => {
             try {
-                const res = await axios.get('http://localhost:3001/api/usuarios', { headers: getAuthHeaders() });
+                const res = await axios.get(`${API_BASE}/api/usuarios`, { headers: getAuthHeaders() });
                 setVendedores(res.data || []);
             } catch (e) {
                 console.error('No se pudieron cargar los vendedores', e);

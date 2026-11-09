@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import './Usuarios.css';
@@ -16,7 +17,7 @@ const Usuarios = () => {
 
     const loadUsers = useCallback(async () => {
         try {
-            const response = await axios.get('http://localhost:3001/api/usuarios');
+            const response = await axios.get(`${API_BASE}/api/usuarios`);
             setUsers(response.data);
         } catch (requestError) {
             setError(requestError.response?.data?.error || 'No se pudieron cargar las cuentas.');
@@ -33,7 +34,7 @@ const Usuarios = () => {
         setMessage('');
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:3001/api/usuarios', { username, password });
+            await axios.post(`${API_BASE}/api/usuarios`, { username, password });
             setUsername('');
             setPassword('');
             setMessage('Vendedor creado. Deberá cambiar la contraseña al iniciar sesión.');
@@ -49,7 +50,7 @@ const Usuarios = () => {
         setError('');
         setMessage('');
         try {
-            await axios.patch(`http://localhost:3001/api/usuarios/${user.id}/active`, { active: !user.activo });
+            await axios.patch(`${API_BASE}/api/usuarios/${user.id}/active`, { active: !user.activo });
             await loadUsers();
         } catch (requestError) {
             setError(requestError.response?.data?.error || 'No se pudo actualizar la cuenta.');
@@ -61,7 +62,7 @@ const Usuarios = () => {
         setError('');
         setMessage('');
         try {
-            await axios.patch(`http://localhost:3001/api/usuarios/${resetUser.id}/password`, { password: resetPassword });
+            await axios.patch(`${API_BASE}/api/usuarios/${resetUser.id}/password`, { password: resetPassword });
             setMessage(`Contraseña restablecida para ${resetUser.nombre_usuario}; deberá cambiarla al iniciar sesión.`);
             setResetUser(null);
             setResetPassword('');
@@ -75,7 +76,7 @@ const Usuarios = () => {
         setError('');
         setMessage('');
         try {
-            const { data } = await axios.patch(`http://localhost:3001/api/usuarios/${renameUser.id}/username`, { username: renameValue });
+            const { data } = await axios.patch(`${API_BASE}/api/usuarios/${renameUser.id}/username`, { username: renameValue });
             setMessage(`Nombre actualizado a ${data.nombre_usuario}.`);
             setRenameUser(null);
             setRenameValue('');

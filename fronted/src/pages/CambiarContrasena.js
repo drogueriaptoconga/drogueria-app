@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -17,7 +18,7 @@ const CambiarContrasena = ({ onSaved }) => {
         }
         setIsSaving(true);
         try {
-            await axios.post('http://localhost:3001/api/auth/change-password', { currentPassword, newPassword });
+            await axios.post(`${API_BASE}/api/auth/change-password`, { currentPassword, newPassword });
             onSaved();
         } catch (requestError) {
             setError(requestError.response?.data?.error || 'No se pudo cambiar la contraseña.');

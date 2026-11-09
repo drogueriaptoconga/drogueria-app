@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 // src/components/Navbar.js
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,7 +16,7 @@ const Navbar = ({ currentUser, onLogout }) => {
 
     const handleLogout = async () => {
         try {
-            await axios.post('http://localhost:3001/api/auth/logout');
+            await axios.post(`${API_BASE}/api/auth/logout`);
         } catch (error) {
             console.error('Error al cerrar sesión:', error.message);
         } finally {
@@ -27,7 +28,7 @@ const Navbar = ({ currentUser, onLogout }) => {
     const handleBackup = async () => {
         setIsBackingUp(true);
         try {
-            const response = await axios.get('http://localhost:3001/api/backup', {
+            const response = await axios.get(`${API_BASE}/api/backup`, {
                 headers: getAuthHeaders(),
                 responseType: 'blob'
             });
@@ -61,7 +62,7 @@ const Navbar = ({ currentUser, onLogout }) => {
     const handleSync = async () => {
         setIsSyncing(true);
         try {
-            const { data } = await axios.post('http://localhost:3001/api/supabase/sync', {}, {
+            const { data } = await axios.post(`${API_BASE}/api/supabase/sync`, {}, {
                 headers: getAuthHeaders()
             });
             window.alert(data.message || 'Sincronización con Supabase completada.');

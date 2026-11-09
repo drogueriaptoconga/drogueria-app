@@ -1,3 +1,4 @@
+import API_BASE from './api';
 // src/App.js
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
@@ -64,7 +65,7 @@ function AppRoutes() {
       return;
     }
 
-    axios.get('http://localhost:3001/api/auth/me')
+    axios.get(`${API_BASE}/api/auth/me`)
       .then(({ data }) => {
         setCurrentUser(data.user);
         saveAuthSession(token, data.user);

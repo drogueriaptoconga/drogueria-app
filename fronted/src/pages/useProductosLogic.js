@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { calculateMargin, sanitizeFormData } from './productUtils';
@@ -60,7 +61,7 @@ const useProductosLogic = () => {
         const requestId = ++searchRequestRef.current;
         try {
             setIsLoading(true);
-            let url = `http://localhost:3001/api/productos?search=${encodeURIComponent(term)}`;
+            let url = `${API_BASE}/api/productos?search=${encodeURIComponent(term)}`;
             if (expired) url += '&expired=true';
             if (warning) url += '&warning=true';
             if (showLowStock) url += '&lowStock=true';
@@ -158,7 +159,7 @@ const useProductosLogic = () => {
         if (existingProduct) return existingProduct;
 
         try {
-            const response = await axios.get(`http://localhost:3001/api/productos?search=${encodeURIComponent(normalizedCode)}`);
+            const response = await axios.get(`${API_BASE}/api/productos?search=${encodeURIComponent(normalizedCode)}`);
             return (response.data || []).find(p => p.codigo_producto === normalizedCode) || false;
         } catch (error) {
             console.error('Error al validar código de producto:', error);
@@ -266,7 +267,7 @@ const useProductosLogic = () => {
         
         try {
             setIsLoading(true);
-            await axios.delete(`http://localhost:3001/api/productos/${id}`);
+            await axios.delete(`${API_BASE}/api/productos/${id}`);
             await fetchProductos(searchTerm, showExpired, showWarning);
             showGlobalMessage(`Producto "${nombre}" eliminado exitosamente`, 'success');
         } catch (error) {
@@ -368,7 +369,7 @@ const useProductosLogic = () => {
             console.log('📦 Enviando al backend:', sanitizedForm);
 
             if (isEditing) {
-                const response = await axios.put(`http://localhost:3001/api/productos/${currentId}`, sanitizedForm);
+                const response = await axios.put(`${API_BASE}/api/productos/${currentId}`, sanitizedForm);
                 setFormMessage({ type: 'success', text: response.data.message });
                 showGlobalMessage(`Producto "${form.nombre}" actualizado exitosamente`, 'success');
                 setShowForm(false);
@@ -376,7 +377,7 @@ const useProductosLogic = () => {
                 await fetchProductos('', showExpired, showWarning);
                 if (searchRef.current) searchRef.current.focus();
             } else {
-                const response = await axios.post('http://localhost:3001/api/productos', {
+                const response = await axios.post(`${API_BASE}/api/productos`, {
                     ...sanitizedForm,
                     allowOverwrite: overwriteExisting
                 });

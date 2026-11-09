@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 // src/pages/Reportes.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -73,13 +74,13 @@ const Reportes = () => {
             if (nextFilters.endDate) params.append('endDate', nextFilters.endDate);
 
             const [resumenResponse, entradasResponse, detalleEntradasResponse] = await Promise.all([
-                axios.get(`http://localhost:3001/api/reportes/resumen?${params.toString()}`, {
+                axios.get(`${API_BASE}/api/reportes/resumen?${params.toString()}`, {
                     headers: getAuthHeaders(),
                 }),
-                axios.get(`http://localhost:3001/api/reportes/entradas?${params.toString()}`, {
+                axios.get(`${API_BASE}/api/reportes/entradas?${params.toString()}`, {
                     headers: getAuthHeaders(),
                 }),
-                axios.get(`http://localhost:3001/api/reportes/entradas-detalle?${params.toString()}`, {
+                axios.get(`${API_BASE}/api/reportes/entradas-detalle?${params.toString()}`, {
                     headers: getAuthHeaders(),
                 })
             ]);

@@ -1,9 +1,18 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { authenticate, createSession, revokeSession } = require('../middleware/authentication');
 const { hashPassword, verifyPassword } = require('../utils/passwords');
 
 const router = express.Router();
+
+const loginLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: { error: 'Demasiados intentos de inicio de sesión. Intenta de nuevo en un minuto.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
 
 function publicUser(user) {
     return {
@@ -15,7 +24,7 @@ function publicUser(user) {
     };
 }
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     const username = String(req.body?.username || '').trim();
     const password = req.body?.password;
     if (!username || typeof password !== 'string') {

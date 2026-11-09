@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState } from 'react';
 import axios from 'axios';
 import { saveAuthSession } from '../auth';
@@ -72,7 +73,7 @@ const Login = ({ onLogin }) => {
         setError('');
         setIsSubmitting(true);
         try {
-            const { data } = await axios.post('http://localhost:3001/api/auth/login', { username, password });
+            const { data } = await axios.post(`${API_BASE}/api/auth/login`, { username, password });
             saveAuthSession(data.token, data.user);
             onLogin(data.user);
         } catch (requestError) {

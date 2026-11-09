@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './PuntoDeVenta.css';
@@ -36,7 +37,7 @@ const PuntoDeVenta = () => {
         setSearchTerm(query);
         if (query.length > 2) {
             try {
-                const response = await axios.get(`http://localhost:3001/api/productos?search=${query}`);
+                const response = await axios.get(`${API_BASE}/api/productos?search=${query}`);
                 setSearchResults(response.data);
             } catch (error) {
                 console.error('Error al buscar productos:', error);
@@ -54,7 +55,7 @@ const PuntoDeVenta = () => {
             e.stopPropagation();
             if (searchTerm.trim() !== '') {
                 try {
-                    const response = await axios.get(`http://localhost:3001/api/productos?search=${searchTerm}`);
+                    const response = await axios.get(`${API_BASE}/api/productos?search=${searchTerm}`);
                     if (response.data.length === 1) {
                         addToCart(response.data[0]);
                     } else {
@@ -190,7 +191,7 @@ const PuntoDeVenta = () => {
         setIsLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:3001/api/ventas', ventaData);
+            const response = await axios.post(`${API_BASE}/api/ventas`, ventaData);
             
             console.log('✅ Venta exitosa:', response.data);
             

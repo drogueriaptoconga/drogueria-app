@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 // src/pages/Gastos.js
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
@@ -14,7 +15,7 @@ const Gastos = () => {
 
     const fetchGastos = useCallback(async () => {
         try {
-            const response = await axios.get('http://localhost:3001/api/gastos', { headers: getAuthHeaders() });
+            const response = await axios.get(`${API_BASE}/api/gastos`, { headers: getAuthHeaders() });
             setGastos(response.data);
         } catch (error) {
             console.error('Error al obtener los gastos:', error);
@@ -66,10 +67,10 @@ const Gastos = () => {
         try {
             const newGasto = { concepto: concepto.trim(), monto: montoValue };
             if (editingGasto) {
-                await axios.put(`http://localhost:3001/api/gastos/${editingGasto.id}`, newGasto, { headers: getAuthHeaders() });
+                await axios.put(`${API_BASE}/api/gastos/${editingGasto.id}`, newGasto, { headers: getAuthHeaders() });
                 alert('Gasto actualizado con éxito!');
             } else {
-                await axios.post('http://localhost:3001/api/gastos', newGasto, { headers: getAuthHeaders() });
+                await axios.post(`${API_BASE}/api/gastos`, newGasto, { headers: getAuthHeaders() });
                 alert('Gasto registrado con éxito!');
             }
             setConcepto('');

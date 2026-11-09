@@ -1,3 +1,4 @@
+import API_BASE from '../api';
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './HistorialDeVentas.css';
@@ -32,7 +33,7 @@ const HistorialDeVentas = () => {
             if (horaFin) params.hora_fin = horaFin;
 
             // add auth headers so backend can enforce role checks
-            const response = await axios.get(`http://localhost:3001/api/historial/ventas_detallado`, { params, headers: getAuthHeaders() });
+            const response = await axios.get(`${API_BASE}/api/historial/ventas_detallado`, { params, headers: getAuthHeaders() });
             
             const fetchedSales = response.data.sales;
             const fetchedTotalSales = response.data.total;
@@ -55,7 +56,7 @@ const HistorialDeVentas = () => {
         const loadVendedores = async () => {
             if ((currentUser.role || '').toLowerCase() !== 'admin') return;
             try {
-                const res = await axios.get('http://localhost:3001/api/usuarios', { headers: getAuthHeaders() });
+                const res = await axios.get(`${API_BASE}/api/usuarios`, { headers: getAuthHeaders() });
                 setVendedores(res.data.usuarios || res.data || []);
             } catch (e) {
                 console.error('No se pudieron cargar los vendedores', e);
@@ -88,7 +89,7 @@ const HistorialDeVentas = () => {
 
         try {
             await axios.put(
-                `http://localhost:3001/api/ventas/${selectedSaleId}/anular`,
+                `${API_BASE}/api/ventas/${selectedSaleId}/anular`,
                 { motivo_anulacion: cancelReason },
                 {
                     headers: {
