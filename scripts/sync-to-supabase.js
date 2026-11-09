@@ -11,11 +11,21 @@ types.setTypeParser(1082, (value) => value);
 const TABLES = ['usuarios', 'productos', 'ventas', 'detalle_venta', 'entradas_stock', 'gastos'];
 const BATCH_SIZE = 500;
 
+function buildSchemaOptions() {
+    const schema = (process.env.DB_SCHEMA || '').trim();
+    if (!schema) return {};
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schema)) {
+        throw new Error('DB_SCHEMA no es un nombre de esquema valido.');
+    }
+    return { options: `-c search_path=${schema},public` };
+}
+
 function buildLocalConfig() {
     if (process.env.DATABASE_URL) {
         return {
             connectionString: process.env.DATABASE_URL,
             ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+            ...buildSchemaOptions(),
         };
     }
     return {
@@ -25,6 +35,7 @@ function buildLocalConfig() {
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME || 'drogueria_app',
         ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+        ...buildSchemaOptions(),
     };
 }
 
@@ -38,6 +49,7 @@ function buildSupabaseConfig() {
         ssl: process.env.SUPABASE_DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
         connectionTimeoutMillis: 20000,
         application_name: 'drogueria-sync',
+        ...buildSchemaOptions(),
     };
 }
 
@@ -87,6 +99,7 @@ async function resolveWithPublicDns(connectionString) {
         ssl: process.env.SUPABASE_DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
         connectionTimeoutMillis: 20000,
         application_name: 'drogueria-sync',
+        ...buildSchemaOptions(),
     };
 }
 

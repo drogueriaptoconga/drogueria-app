@@ -8,6 +8,7 @@ const {
 } = require('./sync-to-supabase');
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
+const TARGET_SCHEMA = (process.env.DB_SCHEMA || 'public').trim();
 
 async function main() {
     const target = String(process.argv[2] || '').toLowerCase();
@@ -18,13 +19,19 @@ async function main() {
         return;
     }
 
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(TARGET_SCHEMA)) {
+        console.error('DB_SCHEMA no es un nombre de esquema valido.');
+        process.exitCode = 1;
+        return;
+    }
+
     const client = target === 'supabase'
         ? await createSupabaseClient()
         : await createConnectedClient(buildLocalConfig, 'PostgreSQL local');
 
     try {
         await client.query(
-            `CREATE TABLE IF NOT EXISTS public.schema_migrations (
+            `CREATE TABLE IF NOT EXISTS "${TARGET_SCHEMA}".schema_migrations (
                 filename text PRIMARY KEY,
                 applied_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
             )`
@@ -41,7 +48,7 @@ async function main() {
 
         for (const file of files) {
             const exists = await client.query(
-                'SELECT 1 FROM public.schema_migrations WHERE filename = $1',
+                `SELECT 1 FROM "${TARGET_SCHEMA}".schema_migrations WHERE filename = $1`,
                 [file]
             );
 
@@ -56,7 +63,7 @@ async function main() {
             try {
                 await client.query(sql);
                 await client.query(
-                    'INSERT INTO public.schema_migrations (filename) VALUES ($1)',
+                    `INSERT INTO "${TARGET_SCHEMA}".schema_migrations (filename) VALUES ($1)`,
                     [file]
                 );
                 await client.query('COMMIT');
@@ -67,7 +74,7 @@ async function main() {
             }
         }
 
-        console.log(`Migraciones aplicadas en ${target}.`);
+        console.log(`Migraciones aplicadas en ${target} (${TARGET_SCHEMA}).`);
     } finally {
         await client.end().catch(() => {});
     }

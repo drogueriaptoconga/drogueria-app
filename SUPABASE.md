@@ -4,7 +4,8 @@
 
 - Proyecto Supabase: `mddlmovkbnjsbbeukska` (PostgreSQL 17.11, región `us-west-2`).
 - Esquema creado y primera carga completada.
-- Conteos en Supabase: usuarios 3, productos 2.364, ventas 5.024, detalle_venta 7.788, entradas_stock 1.055, gastos 13.
+- Conteos en Supabase (`public`): usuarios 3, productos 2.364, ventas 5.024, detalle_venta 7.788, entradas_stock 1.055, gastos 13.
+- Segunda droguería Puerto Millo: esquema `puerto_millo` con 2.364 productos (stock 0), 0 ventas/gastos y 1 Admin. Ver [`PUERTO_MILLO.md`](./PUERTO_MILLO.md).
 - Tarea programada de Windows: **`Drogueria - Respaldo Supabase`**, diaria a las **11:00 p. m.**
 - Log: `logs/supabase-sync.log`.
 - `sync_control` registra cada ejecución con estado `OK` o `ERROR`.
@@ -128,6 +129,8 @@ npm run db:supabase:sync
 
 - **No escribir directamente en Supabase.** La sincronización reemplaza las 6 tablas de
   `public`; cualquier cambio hecho solo allá se pierde en la siguiente copia.
+- La sincronización diaria **solo toca `public`**. El esquema `puerto_millo` de Puerto Millo
+  no se modifica.
 - El script reintenta la conexión 3 veces. Si el DNS local falla, resuelve con DNS público
   (`8.8.8.8` / `1.1.1.1`) y se conecta por IP; esto cubre los cortes intermitentes de DNS
   que se vieron en este equipo.

@@ -38,6 +38,7 @@ DB_USER=postgres
 DB_PASSWORD=tu_password
 DB_NAME=drogueria_app
 DB_SSL=false
+# DB_SCHEMA=puerto_millo   # solo para la segunda droguería
 ```
 
 Para Supabase (solo si vas a aplicar migraciones de esquema o sincronizar datos):
@@ -113,9 +114,13 @@ npm run db:migrate:local
 npm run db:migrate:supabase
 ```
 
-El runner crea la tabla `public.schema_migrations` y registra cada archivo aplicado,
-así no se repite. `supabase/schema.sql` es el esquema inicial de referencia; para cambios
-posteriores usa migraciones.
+El runner crea la tabla `schema_migrations` en el esquema activo (`public` por defecto) y
+registra cada archivo aplicado, así no se repite. `supabase/schema.sql` es el esquema
+inicial de referencia; para cambios posteriores usa migraciones.
+
+Para la segunda droguería, define `DB_SCHEMA=puerto_millo` en el `.env` de esa instalación;
+así `npm run db:migrate:supabase` aplica sobre `puerto_millo.schema_migrations` y no toca
+`public`.
 
 > Orden recomendado: aplicar y probar en local, luego en Supabase, y por último correr
 > el sync de datos desde **producción**.
@@ -203,6 +208,18 @@ Si algún día quieres automatizarlo, se puede crear una tarea a una hora fija (
 - No escribir directamente en Supabase: el sync reemplaza las tablas de `public`.
 - La tarea programada de Windows es específica de cada máquina; en desarrollo no hace falta.
 
+## 8.1 Segunda droguería (Puerto Millo)
+
+Puerto Millo vive en el **mismo proyecto de Supabase**, en el esquema `puerto_millo`.
+Ya tiene el catálogo de productos con stock 0 y su propio Admin. Para desplegarla, sigue
+[`PUERTO_MILLO.md`](./PUERTO_MILLO.md). Lo esencial:
+
+- El `.env` de Puerto Millo usa `DATABASE_URL` apuntando a Supabase y `DB_SCHEMA=puerto_millo`.
+- `SUPABASE_SYNC_ENABLED=false`: allí Supabase es la base principal, no un espejo.
+- No se corre `db:supabase:sync` en Puerto Millo.
+- Las migraciones se aplican con `DB_SCHEMA=puerto_millo npm run db:migrate:supabase`.
+- El sync diario de la droguería actual solo toca `public`.
+
 ## 9. Checklist de la nueva máquina
 
 - [ ] Repo clonado.
@@ -213,6 +230,7 @@ Si algún día quieres automatizarlo, se puede crear una tarea a una hora fija (
 - [ ] Backend y frontend arrancan.
 - [ ] Login con Admin funciona.
 - [ ] Si vas a tocar Supabase: `npm run db:migrate:supabase` funciona.
+- [ ] Si es Puerto Millo: `DB_SCHEMA=puerto_millo` y `SUPABASE_SYNC_ENABLED=false`.
 - [ ] Confirmaste que el botón “Sincronizar ahora” está bloqueado en desarrollo.
 
 ## 10. Seguridad

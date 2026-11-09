@@ -420,3 +420,38 @@ Copia este bloque al final del archivo y complétalo:
 - El sync de datos no se ejecuta desde el `.bat`; sigue la tarea diaria.
 
 **Siguiente paso:** probar el `.bat` del escritorio con un commit nuevo desde la máquina de desarrollo.
+
+### 2026-11-08 — DeepSeek V4.1 Flash — Esquema `puerto_millo` en Supabase
+
+**Objetivo:** dejar lista la segunda droguería (Puerto Millo) en el mismo proyecto de Supabase, separada por esquema y solo con el catálogo de productos.
+
+**Cambios:**
+- `db.js`: soporte `DB_SCHEMA` para fijar `search_path`.
+- `scripts/sync-to-supabase.js` y `scripts/migrate.js`: respetan `DB_SCHEMA`; `schema_migrations` se crea en el esquema activo.
+- `scripts/create-puerto-millo.js`: crea el esquema `puerto_millo`, copia el catálogo de `public` con stock 0 y vencimiento nulo, registra la migración base y opcionalmente crea Admin.
+- `package.json`: script `db:create-puerto-millo`.
+- `PUERTO_MILLO.md`: guía de despliegue.
+- `.env.example`: `DB_SCHEMA` documentado.
+- `SETUP.md`, `SUPABASE.md`, `README.md`, `AGENTS.md`: documentación actualizada.
+
+**Datos aplicados en Supabase:**
+- Esquema `puerto_millo`: 2.364 productos (stock 0), 0 ventas, 0 detalles, 0 entradas, 0 gastos, 1 Admin (debe cambiar clave).
+- `public` intacto: 3 usuarios, 2.364 productos, 5.024 ventas, 7.788 detalles, 1.055 entradas, 13 gastos.
+- `puerto_millo.schema_migrations`: baseline `20261108_users_security.sql`.
+- Tablas: 6 de negocio + `schema_migrations` + `sync_control` (sin uso).
+- `DB_SCHEMA=puerto_millo` probado contra Supabase: `current_schema()` = `puerto_millo`.
+- El script aborta si se vuelve a ejecutar.
+- La migración con `DB_SCHEMA=puerto_millo` hace SKIP del baseline.
+
+**Sin probar:**
+- Despliegue real de la app de Puerto Millo en otro equipo/host.
+- Login con el Admin temporal (no se probó para no cambiar la clave).
+
+**Riesgos / notas:**
+- La app de Puerto Millo debe usar `DATABASE_URL` a Supabase + `DB_SCHEMA=puerto_millo` + `SUPABASE_SYNC_ENABLED=false`.
+- No ejecutar `db:supabase:sync` en Puerto Millo; allí Supabase es la base principal.
+- El sync diario de la droguería actual solo toca `public`.
+- La clave temporal del Admin de Puerto Millo se entregó por chat y debe cambiarse en el primer ingreso.
+- La `sb_secret_...` sigue pendiente de rotar.
+
+**Siguiente paso:** cuando se decida montar Puerto Millo, clonar el repo en el host, crear el `.env` con `DB_SCHEMA=puerto_millo`, correr `npm run db:migrate:supabase` y arrancar.

@@ -6,6 +6,7 @@ Aplicación fullstack (Express + React) para inventario y ventas de la droguerí
 
 - [`SETUP.md`](./SETUP.md): montar el proyecto en otra máquina y flujo entre desarrollo y producción.
 - [`SUPABASE.md`](./SUPABASE.md): respaldo espejo en Supabase.
+- [`PUERTO_MILLO.md`](./PUERTO_MILLO.md): segunda droguería en el esquema `puerto_millo`.
 - [`BACKUP.md`](./BACKUP.md): respaldos locales con `pg_dump`.
 - [`AGENTS.md`](./AGENTS.md) y [`HANDOFF.md`](./HANDOFF.md): guía y bitácora para agentes.
 

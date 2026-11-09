@@ -86,6 +86,7 @@ drogueria-app/
 │   ├── auto-deploy.js            # Auto-deploy por sondeo de Git (solo produccion)
 │   ├── auto-deploy.bat           # Tarea programada de Windows
 │   ├── bootstrap-supabase.js
+│   ├── create-puerto-millo.js   # Esquema puerto_millo en Supabase
 │   ├── diagnostico-pre-supabase.sql
 │   ├── migrate.js                # Runner de migraciones local/Supabase
 │   ├── reset-admin-password.js
@@ -218,7 +219,7 @@ No se usa `fecha_vencimiento` aquí (hay esquemas antiguos sin esa columna).
 
 ### Conexión
 
-`db.js` prioriza `DATABASE_URL`; si no existe, usa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Con `DB_SSL=true` acepta certificados remotos (Supabase). Pool: `max 20`, timeout de conexión 2 s.
+`db.js` prioriza `DATABASE_URL`; si no existe, usa `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Con `DB_SSL=true` acepta certificados remotos (Supabase). Si `DB_SCHEMA` está definido, fija `search_path` a ese esquema (por ejemplo `puerto_millo`) y usa `public` como respaldo. Pool: `max 20`, timeout de conexión 2 s.
 
 ---
 
@@ -348,6 +349,7 @@ Estado actual:
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexión PostgreSQL. Default de `DB_NAME`: `drogueria_app`. |
 | `DATABASE_URL` | Alternativa de conexión única (Supabase/remoto); tiene prioridad. |
 | `DB_SSL` | `true` para conexiones remotas con SSL. |
+| `DB_SCHEMA` | Opcional. Esquema a usar (ej. `puerto_millo`). Por defecto `public`. |
 | `PG_DUMP_PATH` | Ruta completa a `pg_dump` si no está en `PATH`. |
 | `NODE_ENV` | `production` oculta detalles de error y logs de depuración. |
 

@@ -25,6 +25,16 @@ if (process.env.DATABASE_URL) {
     }
 }
 
+// Esquema opcional para separar droguerías dentro de la misma base.
+// Por defecto se usa public. Ej: DB_SCHEMA=puerto_millo
+const dbSchema = (process.env.DB_SCHEMA || '').trim();
+if (dbSchema) {
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbSchema)) {
+        throw new Error('DB_SCHEMA no es un nombre de esquema válido.');
+    }
+    poolConfig.options = `-c search_path=${dbSchema},public`;
+}
+
 const pool = new Pool({
     ...poolConfig,
     max: 20,

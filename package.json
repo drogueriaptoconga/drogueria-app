@@ -11,6 +11,7 @@
     "db:supabase:sync": "node scripts/sync-to-supabase.js",
     "db:migrate:local": "node scripts/migrate.js local",
     "db:migrate:supabase": "node scripts/migrate.js supabase",
+    "db:create-puerto-millo": "node scripts/create-puerto-millo.js",
     "deploy:auto": "node scripts/auto-deploy.js"
   },
   "keywords": [],
