@@ -455,3 +455,73 @@ Copia este bloque al final del archivo y complétalo:
 - La `sb_secret_...` sigue pendiente de rotar.
 
 **Siguiente paso:** cuando se decida montar Puerto Millo, clonar el repo en el host, crear el `.env` con `DB_SCHEMA=puerto_millo`, correr `npm run db:migrate:supabase` y arrancar.
+---
+
+### 2026-11-08 â€” OpenCode (Beam) â€” Montaje en mÃ¡quina de desarrollo
+
+**Objetivo:** clonar y dejar operativo el proyecto en la mÃ¡quina de desarrollo (Windows), apuntando a PostgreSQL local, con Supabase como espejo quieto en producciÃ³n. Posteriormente se recibieron los 5 commits pendientes del remoto (fast-forward) y se resolviÃ³ el conflicto de HANDOFF.md.
+
+**Cambios:**
+- Repo clonado en `C:\Users\BS-TECNOLOGI02\Documents\Desarrolllos prueba\drogueria-app` (rama `main`).
+- Dependencias instaladas en raÃ­z y en `fronted/` (`--legacy-peer-deps` en frontend por conflicto de `typescript`).
+- Base `drogueria_app` creada en PostgreSQL local (puerto 5432) y restaurada desde `drogueria_app_para_dev.dump` (conteos: usuarios 3, productos 2.364, ventas 5.024, detalle_venta 7.788, entradas_stock 1.055, gastos 13).
+- `.env` creado con `DB_*` locales, `PG_DUMP_PATH`, `SUPABASE_SYNC_ENABLED=false`. `SUPABASE_DATABASE_URL` dejada comentada.
+- `npm run db:migrate:local` â†’ `SKIP 20261108_users_security.sql`.
+- Backend arrancado (`npm run dev`): conecta a PostgreSQL y responde en `http://localhost:3001` (`/api/test` OK).
+- Frontend arrancado (`npm start`) en `http://localhost:3000`.
+- ContraseÃ±a del rol `postgres` local restablecida a `DrogueriaDev2026!` (script temporal ejecutado como administrador; script borrado despuÃ©s).
+- `package-lock.json` revertido para mantener el Ã¡rbol limpio.
+- Recibidos 5 commits del remoto (auto-deploy, KPIs dashboard, actualizaciÃ³n manual, esquema puerto_millo, fix productos solo admin). Fast-forward sin conflictos de cÃ³digo; conflicto de HANDOFF.md resuelto combinando ambas versiones.
+
+**Comandos ejecutados:**
+- `git clone https://github.com/drogueriaptoconga/drogueria-app.git`
+- `npm install` (raÃ­z) y `npm install --legacy-peer-deps` (fronted)
+- `createdb` + `pg_restore --no-owner --no-privileges drogueria_app_para_dev.dump`
+- `npm run db:migrate:local` â†’ SKIP
+- `npm run dev` (backend) y `npm start` (frontend) en background
+- `git fetch origin` + `git stash` + `git pull` + `git stash pop` (conflicto resuelto) + `git stash drop`
+- `git status` â†’ limpio (salvo `HANDOFF.md`)
+
+**Sin probar:**
+- Login manual en navegador (pendiente de la contraseÃ±a real del Admin).
+- Flujo completo de venta/entrada/traslado en esta mÃ¡quina.
+- Migraciones de esquema a Supabase (`npm run db:migrate:supabase`) por no tener la connection string de la base.
+- Sync de datos: **no ejecutado** (bloqueado por `SUPABASE_SYNC_ENABLED=false`).
+
+**Riesgos / notas:**
+- La contraseÃ±a `DrogueriaDev2026!` quedÃ³ en el `.env` (ignorado por git). No compartirla.
+- Las keys de Supabase publicadas por chat (`sb_publishable_...`, `sb_secret_...`) deben rotarse por seguridad.
+- El PostgreSQL local corre en el puerto 5432 estÃ¡ndar.
+- Para aplicar migraciones de esquema a Supabase desde aquÃ­, falta la `SUPABASE_DATABASE_URL` (Session Pooler, puerto 5432).
+
+**Siguiente paso:** entrar a `http://localhost:3000` como `Admin` con su contraseÃ±a real y verificar el login; luego, si se requiere, agregar la connection string de Supabase al `.env` para poder correr `npm run db:migrate:supabase`.
+'
+
+
+### 2026-11-08 — OpenCode (Beam) — Ventas por vendedor con filtros de fecha/hora
+
+**Objetivo:** permitir consultar cuánto vendió cada vendedor, con filtros por intervalo de fechas y horas, y mostrar el vendedor en el historial de ventas.
+
+**Cambios:**
+- `routes/historial.js`: `/ventas_detallado` ahora hace `LEFT JOIN usuarios` y devuelve `usuario_id`/`usuario_nombre` por venta; filtros opcionales `usuario_id`, `hora_inicio`, `hora_fin` (zona `America/Bogota`).
+- `routes/reportes.js`: nuevo `GET /api/reportes/ventas_por_vendedor` que resume por vendedor (cantidad de ventas, total vendido, ganancia) en un rango de fecha/hora, con filtros opcionales de vendedor y método de pago.
+- `fronted/src/pages/HistorialDeVentas.js`: columna "Vendedor", filtros de vendedor (admin), hora inicio/fin.
+- `fronted/src/pages/VentasPorVendedor.js`: nueva página con resumen por vendedor y totales.
+- `fronted/src/App.js` y `fronted/src/components/Navbar.js`: ruta y enlace "Ventas por Vendedor" (solo admin).
+- `AGENTS.md`: documentado el nuevo endpoint.
+
+**Comandos ejecutados:**
+- `node --check routes/historial.js routes/reportes.js` → OK.
+- Prueba SQL directa de ambos queries → OK.
+- Prueba HTTP con usuario admin temporal (creado/borrado) de ambos endpoints → 200, datos correctos.
+- `npm run build` (fronted) → compiló con warnings preexistentes.
+
+**Sin probar:**
+- Clic visual en navegador (UI).
+- Filtro por vendedor específico en `/ventas_por_vendedor` con múltiples vendedores (solo Admin tiene ventas en la BD local).
+
+**Riesgos / notas:**
+- Los reportes siguen siendo solo admin (`denyIfAsesor`). El vendedor no accede al historial ni a este reporte.
+- La hora se interpreta en zona `America/Bogota`; rangos que cruzan medianoche se soportan con la lógica de envoltura.
+
+**Siguiente paso:** probar en navegador como Admin; si se quiere, permitir que el vendedor consulte sus propias ventas.

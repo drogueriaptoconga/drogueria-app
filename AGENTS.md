@@ -161,6 +161,7 @@ Todas las rutas cuelgan de `/api`. Excepto `POST /api/auth/login` y `GET /api/te
 | historial | `/historial/ventas_detallado` | GET | admin |
 | historial | `/historial/traslados_detallado` | GET | admin |
 | reportes | `/reportes/*` | GET | admin |
+| reportes | `/reportes/ventas_por_vendedor` | GET | admin |
 | gastos | `/gastos/*` | GET/POST/PUT/DELETE | admin |
 | traslados | `/traslados/*` | GET/POST/PATCH | admin |
 | backup | `/backup` | GET | admin |

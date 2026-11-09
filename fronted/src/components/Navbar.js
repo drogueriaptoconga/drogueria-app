@@ -101,6 +101,11 @@ const Navbar = ({ currentUser, onLogout }) => {
                 )}
                 {showFinancial && (
                     <li>
+                        <Link to="/ventas-por-vendedor">Ventas por Vendedor</Link>
+                    </li>
+                )}
+                {showFinancial && (
+                    <li>
                         <Link to="/entradas-stock">Entradas de Stock</Link>
                     </li>
                 )}

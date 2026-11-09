@@ -7,6 +7,10 @@ const HistorialDeVentas = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('');
+    const [vendedorFilter, setVendedorFilter] = useState('');
+    const [horaInicio, setHoraInicio] = useState('');
+    const [horaFin, setHoraFin] = useState('');
+    const [vendedores, setVendedores] = useState([]);
     const [sales, setSales] = useState([]);
     const [totalSales, setTotalSales] = useState(0);
     const [totalProfit, setTotalProfit] = useState(0);
@@ -23,6 +27,9 @@ const HistorialDeVentas = () => {
             if (start) params.startDate = start;
             if (end) params.endDate = end;
             if (paymentMethod) params.metodo_pago = paymentMethod;
+            if (vendedorFilter) params.usuario_id = vendedorFilter;
+            if (horaInicio) params.hora_inicio = horaInicio;
+            if (horaFin) params.hora_fin = horaFin;
 
             // add auth headers so backend can enforce role checks
             const response = await axios.get(`http://localhost:3001/api/historial/ventas_detallado`, { params, headers: getAuthHeaders() });
@@ -38,11 +45,24 @@ const HistorialDeVentas = () => {
             console.error('Error al obtener el historial de ventas:', error);
             alert('Error al obtener el historial de ventas. Por favor, inténtalo de nuevo.');
         }
-    }, [paymentMethod]);
+    }, [paymentMethod, vendedorFilter, horaInicio, horaFin]);
 
     useEffect(() => {
         fetchSales();
     }, [fetchSales]);
+
+    useEffect(() => {
+        const loadVendedores = async () => {
+            if ((currentUser.role || '').toLowerCase() !== 'admin') return;
+            try {
+                const res = await axios.get('http://localhost:3001/api/usuarios', { headers: getAuthHeaders() });
+                setVendedores(res.data.usuarios || res.data || []);
+            } catch (e) {
+                console.error('No se pudieron cargar los vendedores', e);
+            }
+        };
+        loadVendedores();
+    }, [currentUser.role]);
 
     const handleSearch = () => {
         fetchSales(startDate, endDate);
@@ -116,6 +136,25 @@ const HistorialDeVentas = () => {
                         <option value="Mixto">Mixto</option>
                     </select>
                 </div>
+                {currentUser.role === 'admin' && (
+                    <div className="filter-item">
+                        <label>Vendedor:</label>
+                        <select value={vendedorFilter} onChange={(e) => setVendedorFilter(e.target.value)}>
+                            <option value="">Todos</option>
+                            {vendedores.map((v) => (
+                                <option key={v.id} value={v.id}>{v.nombre_usuario}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                <div className="filter-item">
+                    <label>Hora inicio:</label>
+                    <input type="time" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} />
+                </div>
+                <div className="filter-item">
+                    <label>Hora fin:</label>
+                    <input type="time" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} />
+                </div>
                 <button onClick={handleSearch}>Buscar</button>
             </div>
             
@@ -138,6 +177,7 @@ const HistorialDeVentas = () => {
                             <tr>
                                 <th>ID Venta</th>
                                 <th>Fecha</th>
+                                <th>Vendedor</th>
                                 <th>Método Pago</th>
                                 <th>Monto Total</th>
                                 <th>Ganancia</th>
@@ -157,6 +197,7 @@ const HistorialDeVentas = () => {
                                     <tr key={sale.id} className={isCanceled ? 'sale-canceled' : ''}>
                                         <td>{sale.id}</td>
                                         <td>{new Date(sale.fecha_venta).toLocaleString()}</td>
+                                        <td>{sale.usuario_nombre || 'Sistema'}</td>
                                         <td>
                                             <strong>{sale.metodo_pago}</strong>
                                             {Number(sale.monto_efectivo) > 0 && (

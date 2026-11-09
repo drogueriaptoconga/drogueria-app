@@ -609,4 +609,120 @@ router.get('/traslados-detalle', denyIfAsesor, async (req, res) => {
     }
 });
 
+// Ruta para obtener el resumen de ventas por vendedor en un rango de fecha/hora
+router.get('/ventas_por_vendedor', denyIfAsesor, async (req, res) => {
+    let { startDate, endDate, hora_inicio: horaInicio, hora_fin: horaFin, usuario_id: usuarioId, metodo_pago: metodoPago } = req.query;
+
+    if (!startDate || !endDate) {
+        const today = (new Date()).toISOString().slice(0, 10);
+        startDate = startDate || today;
+        endDate = endDate || today;
+    }
+
+    const normalizeTime = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim();
+        if (/^\\d{2}:\\d{2}$/.test(trimmed)) return `${trimmed}:00`;
+        if (/^\\d{2}:\\d{2}:\\d{2}$/.test(trimmed)) return trimmed;
+        return null;
+    };
+    horaInicio = normalizeTime(horaInicio);
+    horaFin = normalizeTime(horaFin);
+
+    const conditions = [
+        `(v.fecha_venta AT TIME ZONE '${BUSINESS_TIMEZONE}')::date BETWEEN $1::date AND $2::date`,
+        `COALESCE(v.anulado, false) = false`
+    ];
+    const params = [startDate, endDate];
+
+    if (['Efectivo', 'Transferencia', 'Mixto'].includes(metodoPago)) {
+        conditions.push(`v.metodo_pago = $${params.length + 1}`);
+        params.push(metodoPago);
+    }
+    if (usuarioId) {
+        conditions.push(`v.usuario_id = $${params.length + 1}`);
+        params.push(parseInt(usuarioId, 10));
+    }
+
+    const timeExpr = `(v.fecha_venta AT TIME ZONE '${BUSINESS_TIMEZONE}')::time`;
+    if (horaInicio && horaFin) {
+        if (horaInicio <= horaFin) {
+            conditions.push(`${timeExpr} BETWEEN $${params.length + 1}::time AND $${params.length + 2}::time`);
+            params.push(horaInicio, horaFin);
+        } else {
+            conditions.push(`(${timeExpr} >= $${params.length + 1}::time OR ${timeExpr} <= $${params.length + 2}::time)`);
+            params.push(horaInicio, horaFin);
+        }
+    } else if (horaInicio) {
+        conditions.push(`${timeExpr} >= $${params.length + 1}::time`);
+        params.push(horaInicio);
+    } else if (horaFin) {
+        conditions.push(`${timeExpr} <= $${params.length + 1}::time`);
+        params.push(horaFin);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const query = `
+        WITH ventas_filtradas AS (
+            SELECT v.id, v.usuario_id, v.monto_total
+            FROM ventas v
+            WHERE ${whereClause}
+        ),
+        ganancia_por_venta AS (
+            SELECT dv.venta_id,
+                   SUM(GREATEST(0, (dv.precio_venta - (
+                       CASE dv.tipo_venta
+                           WHEN 'Unidad' THEN COALESCE(p.costo_unidad, 0)
+                           WHEN 'Sobre' THEN COALESCE(p.costo_unidad, 0) * COALESCE(p.unidades_por_sobre, 0)
+                           WHEN 'Caja' THEN COALESCE(p.costo_unidad, 0) * COALESCE(p.unidades_por_caja, 0)
+                           WHEN 'Solo Sobre' THEN COALESCE(p.costo_unidad, 0)
+                           WHEN 'Solo Caja' THEN COALESCE(p.costo_unidad, 0)
+                           ELSE COALESCE(p.costo_unidad, 0)
+                       END
+                   )) * dv.cantidad_vendida)) AS ganancia
+            FROM detalle_venta dv
+            JOIN productos p ON p.id = dv.producto_id
+            WHERE dv.venta_id IN (SELECT id FROM ventas_filtradas)
+            GROUP BY dv.venta_id
+        )
+        SELECT
+            u.id AS usuario_id,
+            COALESCE(u.nombre_usuario, 'Sistema') AS usuario_nombre,
+            u.rol,
+            COUNT(vf.id) AS cantidad_ventas,
+            COALESCE(SUM(vf.monto_total), 0) AS monto_total,
+            COALESCE(SUM(gpv.ganancia), 0) AS ganancia_total
+        FROM ventas_filtradas vf
+        LEFT JOIN usuarios u ON u.id = vf.usuario_id
+        LEFT JOIN ganancia_por_venta gpv ON gpv.venta_id = vf.id
+        GROUP BY u.id, u.nombre_usuario, u.rol
+        ORDER BY monto_total DESC, usuario_nombre ASC;
+    `;
+
+    try {
+        const result = await db.query(query, params);
+        const rows = result.rows.map((r) => ({
+            usuario_id: r.usuario_id,
+            usuario_nombre: r.usuario_nombre,
+            rol: r.rol,
+            cantidad_ventas: parseInt(r.cantidad_ventas, 10) || 0,
+            monto_total: Math.round(parseFloat(r.monto_total) || 0),
+            ganancia_total: Math.round(parseFloat(r.ganancia_total) || 0)
+        }));
+
+        const totales = rows.reduce((acc, r) => {
+            acc.cantidad_ventas += r.cantidad_ventas;
+            acc.monto_total += r.monto_total;
+            acc.ganancia_total += r.ganancia_total;
+            return acc;
+        }, { cantidad_ventas: 0, monto_total: 0, ganancia_total: 0 });
+
+        res.json({ vendedores: rows, totales });
+    } catch (err) {
+        console.error('Error al generar el reporte de ventas por vendedor:', err);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
 module.exports = router;

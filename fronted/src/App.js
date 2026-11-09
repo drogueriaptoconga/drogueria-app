@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Productos from './pages/Productos';
 import PuntoDeVenta from './pages/PuntoDeVenta';
 import HistorialDeVentas from './pages/HistorialDeVentas'; // Importamos el nuevo componente
+import VentasPorVendedor from './pages/VentasPorVendedor';
 import EntradasStock from './pages/EntradasStock';
 import Traslados from './pages/Traslados';
 import Gastos from './pages/Gastos';
@@ -107,6 +108,7 @@ function AppRoutes() {
           <Route path="/productos" element={<AdminRoute user={currentUser}><Productos /></AdminRoute>} />
           <Route path="/punto-de-venta" element={<PuntoDeVenta />} />
           <Route path="/historial-ventas" element={<AdminRoute user={currentUser}><HistorialDeVentas /></AdminRoute>} />
+          <Route path="/ventas-por-vendedor" element={<AdminRoute user={currentUser}><VentasPorVendedor /></AdminRoute>} />
           <Route path="/entradas-stock" element={<AdminRoute user={currentUser}><EntradasStock /></AdminRoute>} />
           <Route path="/traslados" element={<AdminRoute user={currentUser}><Traslados /></AdminRoute>} />
           <Route path="/gastos" element={<AdminRoute user={currentUser}><Gastos /></AdminRoute>} />

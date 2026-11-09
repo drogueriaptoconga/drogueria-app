@@ -39,22 +39,71 @@ function calcularGananciaLinea(producto, precioVenta, tipoVenta, cantidadVendida
     return Number.isFinite(ganancia) ? Math.max(0, ganancia) : 0;
 }
 
+function buildVentasFilters({ startDate, endDate, metodoPago, usuarioId, horaInicio, horaFin }) {
+    const conditions = [
+        `(v.fecha_venta AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND $2::date`,
+        `COALESCE(v.anulado, false) = false`
+    ];
+    const params = [startDate, endDate];
+
+    if (['Efectivo', 'Transferencia', 'Mixto'].includes(metodoPago)) {
+        conditions.push(`v.metodo_pago = $${params.length + 1}`);
+        params.push(metodoPago);
+    }
+
+    if (usuarioId) {
+        conditions.push(`v.usuario_id = $${params.length + 1}`);
+        params.push(parseInt(usuarioId, 10));
+    }
+
+    const timeExpr = `(v.fecha_venta AT TIME ZONE 'America/Bogota')::time`;
+    if (horaInicio && horaFin) {
+        if (horaInicio <= horaFin) {
+            conditions.push(`${timeExpr} BETWEEN $${params.length + 1}::time AND $${params.length + 2}::time`);
+            params.push(horaInicio, horaFin);
+        } else {
+            conditions.push(`(${timeExpr} >= $${params.length + 1}::time OR ${timeExpr} <= $${params.length + 2}::time)`);
+            params.push(horaInicio, horaFin);
+        }
+    } else if (horaInicio) {
+        conditions.push(`${timeExpr} >= $${params.length + 1}::time`);
+        params.push(horaInicio);
+    } else if (horaFin) {
+        conditions.push(`${timeExpr} <= $${params.length + 1}::time`);
+        params.push(horaFin);
+    }
+
+    return { where: conditions.join(' AND '), params };
+}
+
 // Endpoint para el historial de ventas detallado
 router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
-    let { startDate, endDate, metodo_pago: metodoPago } = req.query;
+    let { startDate, endDate, metodo_pago: metodoPago, usuario_id: usuarioId, hora_inicio: horaInicio, hora_fin: horaFin } = req.query;
 
     if (!startDate || !endDate) {
         startDate = getBusinessDate();
         endDate = startDate;
     }
 
-    const startOfDay = `${startDate} 00:00:00`;
-    const endOfDay = `${endDate} 23:59:59`;
-    const queryParams = [startDate, endDate];
-    const paymentFilter = ['Efectivo', 'Transferencia', 'Mixto'].includes(metodoPago)
-        ? ` AND v.metodo_pago = $3`
-        : '';
-    if (paymentFilter) queryParams.push(metodoPago);
+    // Normalizar horas a HH:MM si vienen con segundos
+    const normalizeTime = (value) => {
+        if (!value) return null;
+        const trimmed = String(value).trim();
+        if (/^\d{2}:\d{2}$/.test(trimmed)) return `${trimmed}:00`;
+        if (/^\d{2}:\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+        return null;
+    };
+    horaInicio = normalizeTime(horaInicio);
+    horaFin = normalizeTime(horaFin);
+
+    const { where, params: queryParams } = buildVentasFilters({
+        startDate,
+        endDate,
+        metodoPago,
+        usuarioId,
+        horaInicio,
+        horaFin
+    });
 
     const query = `
         SELECT 
@@ -68,6 +117,8 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
             v.estado,
             v.motivo_anulacion,
             v.fecha_anulacion,
+            v.usuario_id,
+            u.nombre_usuario AS usuario_nombre,
             dv.producto_id,
             p.codigo_producto,
             p.nombre AS nombre_producto,
@@ -75,7 +126,6 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
             dv.cantidad_vendida,
             dv.precio_venta,
             dv.tipo_venta,
-            -- calcular costo por unidad de venta según tipo
             CASE dv.tipo_venta
                 WHEN 'Unidad' THEN COALESCE(p.costo_unidad, 0)
                 WHEN 'Sobre' THEN COALESCE(p.costo_unidad, 0) * COALESCE(p.unidades_por_sobre, 0)
@@ -84,7 +134,6 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
                 WHEN 'Solo Caja' THEN COALESCE(p.costo_unidad, 0)
                 ELSE COALESCE(p.costo_unidad, 0)
             END AS costo_por_unidad_venta,
-            -- ganancia por línea: nunca debe quedar negativa; si el costo supera el precio, se reporta en cero
             GREATEST(0, (dv.precio_venta - (
                 CASE dv.tipo_venta
                     WHEN 'Unidad' THEN COALESCE(p.costo_unidad, 0)
@@ -98,16 +147,15 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
         FROM ventas AS v
         JOIN detalle_venta AS dv ON v.id = dv.venta_id 
         JOIN productos AS p ON dv.producto_id = p.id
-                WHERE (v.fecha_venta AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND $2::date
-                    AND COALESCE(v.anulado, false) = false${paymentFilter}
+        LEFT JOIN usuarios AS u ON u.id = v.usuario_id
+        WHERE ${where}
         ORDER BY v.fecha_venta DESC;
     `;
 
     const totalQuery = `
         SELECT SUM(monto_total) AS total_ventas 
         FROM ventas v
-            WHERE (v.fecha_venta AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND $2::date
-                AND COALESCE(v.anulado, false) = false${paymentFilter};
+        WHERE ${where};
     `;
 
     const totalProfitQuery = `
@@ -124,8 +172,7 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
         FROM ventas v
         JOIN detalle_venta dv ON v.id = dv.venta_id
         JOIN productos p ON dv.producto_id = p.id
-                WHERE (v.fecha_venta AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND $2::date
-                    AND COALESCE(v.anulado, false) = false${paymentFilter};
+        WHERE ${where};
     `;
 
     try {
@@ -149,6 +196,8 @@ router.get('/ventas_detallado', denyIfAsesor, async (req, res) => {
                     estado: row.estado,
                     motivo_anulacion: row.motivo_anulacion,
                     fecha_anulacion: row.fecha_anulacion,
+                    usuario_id: row.usuario_id,
+                    usuario_nombre: row.usuario_nombre || 'Sistema',
                     productos: []
                 });
             }
