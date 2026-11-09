@@ -104,7 +104,7 @@ function AppRoutes() {
             navigate(homePath, { replace: true });
           }} />} />
           <Route path="/" element={<AdminRoute user={currentUser}><Dashboard /></AdminRoute>} />
-          <Route path="/productos" element={<Productos />} />
+          <Route path="/productos" element={<AdminRoute user={currentUser}><Productos /></AdminRoute>} />
           <Route path="/punto-de-venta" element={<PuntoDeVenta />} />
           <Route path="/historial-ventas" element={<AdminRoute user={currentUser}><HistorialDeVentas /></AdminRoute>} />
           <Route path="/entradas-stock" element={<AdminRoute user={currentUser}><EntradasStock /></AdminRoute>} />

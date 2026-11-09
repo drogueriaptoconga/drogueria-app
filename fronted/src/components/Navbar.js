@@ -86,9 +86,11 @@ const Navbar = ({ currentUser, onLogout }) => {
                         <Link to="/">Dashboard</Link>
                     </li>
                 )}
-                <li>
-                    <Link to="/productos">Productos</Link>
-                </li>
+                {showFinancial && (
+                    <li>
+                        <Link to="/productos">Productos</Link>
+                    </li>
+                )}
                 <li>
                     <Link to="/punto-de-venta">Punto de Venta</Link>
                 </li>
