@@ -10,7 +10,8 @@
     "db:supabase:schema": "node scripts/bootstrap-supabase.js",
     "db:supabase:sync": "node scripts/sync-to-supabase.js",
     "db:migrate:local": "node scripts/migrate.js local",
-    "db:migrate:supabase": "node scripts/migrate.js supabase"
+    "db:migrate:supabase": "node scripts/migrate.js supabase",
+    "deploy:auto": "node scripts/auto-deploy.js"
   },
   "keywords": [],
   "author": "",

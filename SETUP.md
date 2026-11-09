@@ -169,12 +169,28 @@ desarrollo y apunta ahí `SUPABASE_DATABASE_URL`.
 
 ### Máquina de producción (esta)
 
-1. `git pull`
+1. `git pull` (o deja que la tarea de auto-deploy lo haga).
 2. Si cambió `package.json` o `fronted/package.json`: `npm install` y `cd fronted && npm install`.
 3. `npm run db:migrate:local`
 4. `npm run db:migrate:supabase`
 5. Reiniciar backend y frontend.
 6. La tarea diaria de las 23:00 sigue funcionando.
+
+### Auto-deploy en producción
+
+La máquina de producción tiene la tarea de Windows **`Drogueria - Auto Deploy`**, que corre
+cada **5 minutos**:
+
+- Revisa `origin/main` y solo avanza con `--ff-only`.
+- Si hay cambios: valida sintaxis de los JS, instala dependencias si cambiaron, aplica
+  migraciones (`local` y `supabase`), compila el frontend y corre los tests puros.
+- Hace un **preflight del backend en el puerto 3002**. Si responde, recién ahí reinicia
+  el backend en el 3001.
+- Si algo falla antes del reinicio, el backend anterior sigue corriendo.
+- **No** ejecuta el sync de datos; eso sigue en la tarea diaria de las 23:00.
+- Logs: `logs/auto-deploy.log` y `logs/backend.log`.
+- Manual: `npm run deploy:auto` o `node scripts/auto-deploy.js --force-restart`.
+- Para desactivarlo: Programador de tareas → `Drogueria - Auto Deploy` → Deshabilitar.
 
 ### Reglas
 

@@ -83,8 +83,14 @@ drogueria-app/
 │   └── 20261108_users_security.sql
 ├── scripts/
 │   ├── apply-users-migration.js
+│   ├── auto-deploy.js            # Auto-deploy por sondeo de Git (solo produccion)
+│   ├── auto-deploy.bat           # Tarea programada de Windows
+│   ├── bootstrap-supabase.js
+│   ├── diagnostico-pre-supabase.sql
+│   ├── migrate.js                # Runner de migraciones local/Supabase
 │   ├── reset-admin-password.js
-│   └── diagnostico-pre-supabase.sql
+│   ├── sync-supabase.bat
+│   └── sync-to-supabase.js
 ├── supabase/                     # Diagnóstico y permisos para Supabase (SQL)
 ├── test/                         # Tests con node:test (ver sección 9)
 ├── fronted/                      # ⚠️ carpeta con typo histórico; NO renombrar sin migrar todo
