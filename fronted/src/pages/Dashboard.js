@@ -18,7 +18,6 @@ const Dashboard = () => {
         promedioMensual: 0,
         promedioDiaConVenta: 0,
         porcentajeTransferencia: 0,
-        gananciaBrutaDiaria: 0,
         gastosDiarios: 0,
         gananciaNetaDiaria: 0,
         ventasSemana: []
@@ -49,10 +48,6 @@ const Dashboard = () => {
                     axios.get('http://localhost:3001/api/reportes/promedio_mensual', { headers: getAuthHeaders() })
                 ]);
 
-                const ventasBrutaDiaria = parseFloat(gananciaDiariaResponse.data.ganancia_bruta_diaria || gananciaDiariaResponse.data.ganancia_diaria) || 0;
-                const porcentajeGananciaBruta = parseFloat(gananciaDiariaResponse.data.porcentaje_ganancia_bruta) || 0;
-                const porcentajeGananciaNeta = parseFloat(gananciaDiariaResponse.data.porcentaje_ganancia_neta) || 0;
-
                 setDashboardData({
                     ventasDelDia: parseFloat(ventasResponse.data.ventas_diarias) || 0,
                     ventasEfectivo: parseFloat(ventasResponse.data.ventas_efectivo) || 0,
@@ -61,11 +56,8 @@ const Dashboard = () => {
                     porcentajeTransferencia: parseFloat(ventasResponse.data.porcentaje_transferencia) || 0,
                     promedioMensual: parseFloat(promedioMensualResponse.data.promedio_mensual) || 0,
                     promedioDiaConVenta: parseFloat(promedioMensualResponse.data.promedio_dia_con_venta) || 0,
-                    gananciaBrutaDiaria: ventasBrutaDiaria,
-                    porcentajeGananciaBruta: porcentajeGananciaBruta,
                     gastosDiarios: parseFloat(gananciaDiariaResponse.data.gastos_diarios) || 0,
                     gananciaNetaDiaria: parseFloat(gananciaDiariaResponse.data.ganancia_neta_diaria) || 0,
-                    porcentajeGananciaNeta: porcentajeGananciaNeta,
                     ventasSemana: ventasSemanaResponse.data
                 });
                 setLoading(false);
@@ -138,18 +130,6 @@ const Dashboard = () => {
                 <div className="kpi-card">
                     <h2>Porcentaje transferencia</h2>
                     <p>{dashboardData.porcentajeTransferencia}%</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Ganancia Bruta del Día</h2>
-                    <p style={{color: '#007bff'}}>${dashboardData.gananciaBrutaDiaria}</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Margen Bruto Diario</h2>
-                    <p style={{color: '#17a2b8'}}>{dashboardData.porcentajeGananciaBruta}%</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Margen Neto Diario</h2>
-                    <p style={{color: '#28a745'}}>{dashboardData.porcentajeGananciaNeta}%</p>
                 </div>
                 <div className="kpi-card">
                     <h2>Gastos del Día</h2>
