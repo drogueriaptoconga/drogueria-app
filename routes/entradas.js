@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireAdmin } = require('../middleware/roles');
+router.use(requireAdmin);
 
 // Helper para calcular margen
 function calcMargin(costo, precio) {
@@ -8,7 +10,8 @@ function calcMargin(costo, precio) {
     const c = parseFloat(costo);
     const p = parseFloat(precio);
     if (!isNaN(c) && !isNaN(p) && p > 0) {
-        return parseFloat((((p - c) / p) * 100).toFixed(2));
+        const margin = Math.max(0, ((p - c) / p) * 100);
+        return Number.isFinite(margin) && margin <= 99999999 ? parseFloat(margin.toFixed(2)) : null;
     }
     return null;
 }
@@ -42,12 +45,15 @@ async function sincronizarSecuenciaId(client, tabla, columna = 'id') {
 // =============================
 router.get('/buscar', async (req, res) => {
     const { query } = req.query;
+    const codigoExacto = req.query.codigo_exacto === 'true';
     
-    if (!query || query.trim().length < 2) {
-        return res.status(400).json({ error: 'Se requiere un término de búsqueda de al menos 2 caracteres' });
+    if (!query || query.trim().length < (codigoExacto ? 1 : 2)) {
+        const minimoCaracteres = codigoExacto ? 1 : 2;
+        return res.status(400).json({ error: `Se requiere un término de búsqueda de al menos ${minimoCaracteres} caracteres` });
     }
 
-    const searchQuery = `%${query.trim()}%`;
+    const searchTerm = query.trim();
+    const searchQuery = `%${searchTerm}%`;
     
     const sql = `
         SELECT 
@@ -79,13 +85,14 @@ router.get('/buscar', async (req, res) => {
             fecha_vencimiento,
             dias_alerta_vencimiento
         FROM productos 
-        WHERE codigo_producto ILIKE $1 OR nombre ILIKE $2
-        ORDER BY nombre ASC
+        WHERE ${codigoExacto ? 'codigo_producto::text = $1' : 'codigo_producto ILIKE $1 OR nombre ILIKE $2'}
+        ORDER BY ${codigoExacto ? 'id ASC' : 'nombre ASC'}
         LIMIT 10
     `;
 
     try {
-        const result = await db.query(sql, [searchQuery, searchQuery]);
+        const params = codigoExacto ? [searchTerm] : [searchQuery, searchQuery];
+        const result = await db.query(sql, params);
         res.json(result.rows);
         
     } catch (err) {
@@ -117,8 +124,9 @@ router.post('/', async (req, res) => {
         precio_solo_sobre_entrada,
         precio_solo_caja_entrada,
         fecha_vencimiento,
-        usuario_id = 1 
+        usuario_id
     } = req.body;
+    const auditUserId = req.user.id;
 
     if (process.env.NODE_ENV !== 'production') {
         console.log('📦 Registrando entrada:', { 
@@ -232,13 +240,11 @@ router.post('/', async (req, res) => {
         }
 
         if (producto.venta_exclusiva_sobre && nuevoPrecioSoloSobre && producto.cantidad_solo_sobre) {
-            const costoSoloSobre = nuevoCosto * producto.cantidad_solo_sobre;
-            nuevoMargenSoloSobre = calcMargin(costoSoloSobre, nuevoPrecioSoloSobre);
+            nuevoMargenSoloSobre = calcMargin(nuevoCosto, nuevoPrecioSoloSobre);
         }
 
         if (producto.venta_exclusiva_caja && nuevoPrecioSoloCaja && producto.cantidad_solo_caja) {
-            const costoSoloCaja = nuevoCosto * producto.cantidad_solo_caja;
-            nuevoMargenSoloCaja = calcMargin(costoSoloCaja, nuevoPrecioSoloCaja);
+            nuevoMargenSoloCaja = calcMargin(nuevoCosto, nuevoPrecioSoloCaja);
         }
 
         if (fecha_vencimiento) {
@@ -270,8 +276,8 @@ router.post('/', async (req, res) => {
 
         // Usar valores normalizados (números) en los parámetros
         const entradaParams = siguienteId
-            ? [siguienteId, productoIdNum, cantidadNueva, nuevoCosto, usuario_id, costoAnterior, costoPromedioFinal]
-            : [productoIdNum, cantidadNueva, nuevoCosto, usuario_id, costoAnterior, costoPromedioFinal];
+            ? [siguienteId, productoIdNum, cantidadNueva, nuevoCosto, auditUserId, costoAnterior, costoPromedioFinal]
+            : [productoIdNum, cantidadNueva, nuevoCosto, auditUserId, costoAnterior, costoPromedioFinal];
 
         // Log de depuración para identificar errores en caso de fallo
         if (process.env.NODE_ENV !== 'production') {
@@ -295,7 +301,9 @@ router.post('/', async (req, res) => {
             'margen_caja = $10',
             'margen_solo_sobre = $11',
             'margen_solo_caja = $12',
-            'fecha_ultima_entrada = NOW()'
+            'fecha_ultima_entrada = NOW()',
+            'fecha_modificacion = NOW()',
+            'modificado_por = $13'
         ];
 
         const updateParams = [
@@ -310,19 +318,17 @@ router.post('/', async (req, res) => {
             nuevoMargenSobre,
             nuevoMargenCaja,
             nuevoMargenSoloSobre,
-            nuevoMargenSoloCaja
+            nuevoMargenSoloCaja,
+            String(auditUserId)
         ];
 
         if (fecha_vencimiento) {
-            updateFields.splice(updateFields.length - 1, 0, 'fecha_vencimiento = $13');
-            // Insert fecha_vencimiento before fecha_ultima_entrada position
+            updateFields.splice(updateFields.length - 2, 0, 'fecha_vencimiento = $14');
             updateParams.push(fecha_vencimiento);
-            // producto id will be param 14
             updateParams.push(productoIdNum);
             const updateProductoQuery = `UPDATE productos SET ${updateFields.join(', ')} WHERE id = $${updateParams.length}`;
             await client.query(updateProductoQuery, updateParams);
         } else {
-            // producto id will be param 13
             updateParams.push(productoIdNum);
             const updateProductoQuery = `UPDATE productos SET ${updateFields.join(', ')} WHERE id = $${updateParams.length}`;
             await client.query(updateProductoQuery, updateParams);
@@ -402,6 +408,7 @@ router.get('/historial', async (req, res) => {
         LEFT JOIN productos p ON es.producto_id = p.id
         LEFT JOIN usuarios u ON es.usuario_id = u.id
         WHERE es.anulado = false
+          AND (es.observaciones IS NULL OR es.observaciones NOT ILIKE 'TRASLADO%')
     `;
     let params = [];
     let paramCount = 1;
@@ -424,6 +431,7 @@ router.get('/historial', async (req, res) => {
             SELECT COUNT(*) as total 
             FROM entradas_stock es
             WHERE es.anulado = false
+              AND (es.observaciones IS NULL OR es.observaciones NOT ILIKE 'TRASLADO%')
         `;
         let countParams = [];
         let countParamCount = 1;
@@ -479,6 +487,7 @@ router.get('/estadisticas', async (req, res) => {
                 COUNT(DISTINCT producto_id) as productos_diferentes
             FROM entradas_stock
             WHERE anulado = false
+              AND (observaciones IS NULL OR observaciones NOT ILIKE 'TRASLADO%')
         `;
 
         const result = await db.query(query);

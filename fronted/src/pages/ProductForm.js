@@ -20,7 +20,7 @@ const ProductForm = ({ form, isEditing, formMessage, handleChange, handleSubmit,
                 {/* INDICADOR DE MODO ACTIVO */}
                 {isExclusiveMode && (
                     <div className="mode-indicator exclusive-mode">
-                        🚫 <strong>MODO EXCLUSIVO ACTIVADO</strong> - Solo una opción de venta disponible
+                        🚫 <strong>MODO EXCLUSIVO ACTIVADO</strong> - Puedes seleccionar Solo Sobre y/o Solo Caja
                     </div>
                 )}
                 {isNormalMode && !isExclusiveMode && (
@@ -291,7 +291,7 @@ const ProductForm = ({ form, isEditing, formMessage, handleChange, handleSubmit,
 
                         {/* OPCIONES EXCLUSIVAS - SEGUNDO (MENOS COMÚN) */}
                         <div className="mode-section exclusive-section">
-                            <h4>🚫 Venta Exclusiva (Solo una opción)</h4>
+                            <h4>🚫 Venta Exclusiva</h4>
                             
                             {/* Solo Sobre Exclusivo */}
                             <div className="form-subsection exclusive-option">

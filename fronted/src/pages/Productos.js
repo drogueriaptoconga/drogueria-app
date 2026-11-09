@@ -5,8 +5,10 @@ import ProductForm from './ProductForm';
 import ProductTable from './ProductTable';
 import SearchFilters from './SearchFilters';
 import ProductExistsModal from './ProductExistsModal';
+import { getCurrentUser } from '../auth';
 
 const Productos = () => {
+    const canManageProducts = getCurrentUser()?.role === 'admin';
     const {
         productos,
         searchTerm,
@@ -71,9 +73,10 @@ const Productos = () => {
                 </div>
             )}
             
-            <div className="button-group-top">
+            {canManageProducts && <div className="button-group-top">
                 <button 
                     onClick={() => {
+                        closeModal();
                         setShowForm(!showForm);
                         if (!showForm) resetFormState();
                     }}
@@ -81,9 +84,9 @@ const Productos = () => {
                 >
                     {showForm ? 'Ocultar Formulario' : 'Crear Nuevo Producto'}
                 </button>
-            </div>
+            </div>}
 
-            {showForm && (
+            {canManageProducts && showForm && (
                 <ProductForm
                     form={form}
                     isEditing={isEditing}
@@ -115,6 +118,7 @@ const Productos = () => {
                 handleEdit={handleEdit}
                 handleDelete={handleDelete}
                 isLoading={isLoading}
+                canManage={canManageProducts}
             />
         </div>
     );

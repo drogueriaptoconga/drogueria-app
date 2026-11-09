@@ -2,6 +2,21 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { resolveProductConflict } = require('./productosConflict');
+const { requireAdmin } = require('../middleware/roles');
+
+function sanitizeProduct(producto, req) {
+    if (req.user.role === 'admin') return producto;
+    const {
+        costo_unidad,
+        margen_porcentaje,
+        margen_sobre,
+        margen_caja,
+        margen_solo_sobre,
+        margen_solo_caja,
+        ...publicProduct
+    } = producto;
+    return publicProduct;
+}
 
 // Helper: margen en % según definición actual (porcentaje sobre el precio de venta)
 // margen = ((precio - costo) / precio) * 100
@@ -9,9 +24,27 @@ function calcMargin(costo, precio) {
     const c = parseFloat(costo);
     const p = parseFloat(precio);
     if (!isNaN(c) && !isNaN(p) && p > 0) {
-        return parseFloat((((p - c) / p) * 100).toFixed(2));
+        const margin = Math.max(0, ((p - c) / p) * 100);
+        return Number.isFinite(margin) && margin <= 99999999 ? parseFloat(margin.toFixed(2)) : null;
     }
     return null;
+}
+
+function getAuditUser(req) {
+    const userId = req.user.id;
+    const userName = req.user.nombre;
+    return { userId, userName };
+}
+
+function shouldShowInLowStockList(producto) {
+    if (!producto) return false;
+
+    const stockTotal = Number(producto.stock_total) || 0;
+    const stockMinimo = producto.stock_minimo_alerta === null || producto.stock_minimo_alerta === undefined || producto.stock_minimo_alerta === ''
+        ? 0
+        : Number(producto.stock_minimo_alerta) || 0;
+
+    return stockTotal === 0 || stockTotal <= stockMinimo;
 }
 
 async function getNextProductId() {
@@ -62,9 +95,7 @@ router.get('/', async (req, res) => {
     }
 
     if (showLowStock) {
-        conditions.push('fecha_vencimiento IS NOT NULL');
-        conditions.push('stock_minimo_alerta IS NOT NULL');
-        conditions.push('stock_total <= stock_minimo_alerta');
+        conditions.push('(stock_total = 0 OR stock_total <= COALESCE(stock_minimo_alerta, 0))');
     }
 
     if (conditions.length > 0) {
@@ -99,7 +130,7 @@ router.get('/', async (req, res) => {
             venta_exclusiva_caja: !!producto.venta_exclusiva_caja
         }));
         
-        res.json(productosRedondeados);
+        res.json(productosRedondeados.map(producto => sanitizeProduct(producto, req)));
     } catch (err) {
         console.error('Error al obtener productos:', err);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -109,12 +140,12 @@ router.get('/', async (req, res) => {
 // =============================================
 // RUTA 1.1: Estadísticas de productos
 // =============================================
-router.get('/estadisticas', async (req, res) => {
+router.get('/estadisticas', requireAdmin, async (req, res) => {
     try {
         const query = `
             SELECT 
                 COUNT(*) as total,
-                SUM(CASE WHEN stock_total <= stock_minimo_alerta THEN 1 ELSE 0 END) as stock_bajo,
+                SUM(CASE WHEN stock_total = 0 OR stock_total <= COALESCE(stock_minimo_alerta, 0) THEN 1 ELSE 0 END) as stock_bajo,
                 SUM(CASE WHEN fecha_vencimiento < CURRENT_DATE THEN 1 ELSE 0 END) as vencidos,
                 SUM(CASE WHEN fecha_vencimiento IS NOT NULL AND fecha_vencimiento >= CURRENT_DATE AND fecha_vencimiento <= (CURRENT_DATE + (COALESCE(dias_alerta_vencimiento, 0) || ' days')::INTERVAL) THEN 1 ELSE 0 END) as por_vencer,
                 SUM(CASE WHEN venta_exclusiva_sobre = true THEN 1 ELSE 0 END) as exclusivos_sobre,
@@ -133,7 +164,7 @@ router.get('/estadisticas', async (req, res) => {
 // =============================================
 // RUTA 1.2: Alertas de vencimiento
 // =============================================
-router.get('/alertas/vencimientos', async (req, res) => {
+router.get('/alertas/vencimientos', requireAdmin, async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -205,7 +236,7 @@ router.get('/:id', async (req, res) => {
             venta_exclusiva_caja: !!p.venta_exclusiva_caja
         };
         
-        res.json(producto);
+        res.json(sanitizeProduct(producto, req));
     } catch (err) {
         console.error('Error al obtener el producto:', err);
         res.status(500).json({ error: 'Error interno del servidor' });
@@ -215,7 +246,7 @@ router.get('/:id', async (req, res) => {
 // =============================================
 // RUTA 3: Crear producto
 // =============================================
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
     const { 
         codigo_producto, nombre, costo_unidad, precio_unidad, stock_total,
         margen_porcentaje, stock_minimo_alerta, venta_por_unidad_habilitada,
@@ -226,6 +257,7 @@ router.post('/', async (req, res) => {
         venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja,
         allowOverwrite = false
     } = req.body;
+    const auditUser = getAuditUser(req);
 
     // Validaciones básicas
     if (!codigo_producto || !nombre || costo_unidad === undefined || stock_total === undefined) {
@@ -263,13 +295,11 @@ router.post('/', async (req, res) => {
         }
 
         if (venta_exclusiva_sobre && cantidad_solo_sobre && precio_solo_sobre) {
-            const costoSoloSobre = costo_unidad * cantidad_solo_sobre;
-            m_solo_sobre = calcMargin(costoSoloSobre, precio_solo_sobre);
+            m_solo_sobre = calcMargin(costo_unidad, precio_solo_sobre);
         }
 
         if (venta_exclusiva_caja && cantidad_solo_caja && precio_solo_caja) {
-            const costoSoloCaja = costo_unidad * cantidad_solo_caja;
-            m_solo_caja = calcMargin(costoSoloCaja, precio_solo_caja);
+            m_solo_caja = calcMargin(costo_unidad, precio_solo_caja);
         }
 
         const values = [
@@ -298,8 +328,9 @@ router.post('/', async (req, res) => {
                     fecha_vencimiento = $14, dias_alerta_vencimiento = $15,
                     margen_sobre = $16, margen_caja = $17,
                     venta_exclusiva_sobre = $18, cantidad_solo_sobre = $19, precio_solo_sobre = $20, margen_solo_sobre = $21,
-                    venta_exclusiva_caja = $22, cantidad_solo_caja = $23, precio_solo_caja = $24, margen_solo_caja = $25
-                WHERE id = $26
+                    venta_exclusiva_caja = $22, cantidad_solo_caja = $23, precio_solo_caja = $24, margen_solo_caja = $25,
+                    fecha_modificacion = NOW(), modificado_por = $26
+                WHERE id = $27
                 RETURNING id
             `;
 
@@ -313,6 +344,7 @@ router.post('/', async (req, res) => {
                 m_sobre || null, m_caja || null,
                 venta_exclusiva_sobre || false, cantidad_solo_sobre || stock_total, precio_solo_sobre || null, m_solo_sobre || null,
                 venta_exclusiva_caja || false, cantidad_solo_caja || stock_total, precio_solo_caja || null, m_solo_caja || null,
+                auditUser.userName,
                 existingProduct.id
             ]);
             message = 'Producto actualizado sobrescribiendo el existente';
@@ -330,12 +362,13 @@ router.post('/', async (req, res) => {
                     fecha_vencimiento, dias_alerta_vencimiento,
                     margen_sobre, margen_caja,
                     venta_exclusiva_sobre, cantidad_solo_sobre, precio_solo_sobre, margen_solo_sobre,
-                    venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja, margen_solo_caja
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+                    venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja, margen_solo_caja,
+                    fecha_creacion, fecha_modificacion, creado_por, modificado_por
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, NOW(), NOW(), $28, $29)
                 RETURNING id
             `;
 
-            const insertValues = [nextId, ...values];
+            const insertValues = [nextId, ...values, auditUser.userName, auditUser.userName];
             result = await db.query(insertQuery, insertValues);
             message = 'Producto creado exitosamente';
             statusCode = 201;
@@ -355,7 +388,7 @@ router.post('/', async (req, res) => {
 // =============================================
 // RUTA 4: Actualizar producto
 // =============================================
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { 
         codigo_producto, nombre, costo_unidad, precio_unidad, stock_total,
@@ -366,6 +399,7 @@ router.put('/:id', async (req, res) => {
         venta_exclusiva_sobre, cantidad_solo_sobre, precio_solo_sobre,
         venta_exclusiva_caja, cantidad_solo_caja, precio_solo_caja
     } = req.body;
+    const auditUser = getAuditUser(req);
     
     if (!codigo_producto || !nombre || costo_unidad === undefined || stock_total === undefined) {
         return res.status(400).json({ error: 'Faltan campos obligatorios' });
@@ -400,13 +434,11 @@ router.put('/:id', async (req, res) => {
         }
 
         if (venta_exclusiva_sobre && cantidad_solo_sobre && precio_solo_sobre) {
-            const costoSoloSobre = costo_unidad * cantidad_solo_sobre;
-            m_solo_sobre = calcMargin(costoSoloSobre, precio_solo_sobre);
+            m_solo_sobre = calcMargin(costo_unidad, precio_solo_sobre);
         }
 
         if (venta_exclusiva_caja && cantidad_solo_caja && precio_solo_caja) {
-            const costoSoloCaja = costo_unidad * cantidad_solo_caja;
-            m_solo_caja = calcMargin(costoSoloCaja, precio_solo_caja);
+            m_solo_caja = calcMargin(costo_unidad, precio_solo_caja);
         }
 
         const query = `
@@ -419,8 +451,9 @@ router.put('/:id', async (req, res) => {
                 fecha_vencimiento = $15, dias_alerta_vencimiento = $16,
                 margen_sobre = $17, margen_caja = $18,
                 venta_exclusiva_sobre = $19, cantidad_solo_sobre = $20, precio_solo_sobre = $21, margen_solo_sobre = $22,
-                venta_exclusiva_caja = $23, cantidad_solo_caja = $24, precio_solo_caja = $25, margen_solo_caja = $26
-            WHERE id = $27
+                venta_exclusiva_caja = $23, cantidad_solo_caja = $24, precio_solo_caja = $25, margen_solo_caja = $26,
+                fecha_modificacion = NOW(), modificado_por = $27
+            WHERE id = $28
         `;
 
         await db.query(query, 
@@ -434,6 +467,7 @@ router.put('/:id', async (req, res) => {
                 m_sobre || null, m_caja || null,
                 venta_exclusiva_sobre || false, cantidad_solo_sobre || stock_total, precio_solo_sobre || null, m_solo_sobre || null,
                 venta_exclusiva_caja || false, cantidad_solo_caja || stock_total, precio_solo_caja || null, m_solo_caja || null,
+                auditUser.userName,
                 id
             ]
         );
@@ -448,7 +482,7 @@ router.put('/:id', async (req, res) => {
 // =============================================
 // RUTA 5: Eliminar producto
 // =============================================
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     
     try {
@@ -469,9 +503,10 @@ router.delete('/:id', async (req, res) => {
 // =============================================
 // RUTA 6: Actualizar stock
 // =============================================
-router.patch('/:id/stock', async (req, res) => {
+router.patch('/:id/stock', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { cantidad, operacion } = req.body;
+    const auditUser = getAuditUser(req);
     
     if (!cantidad || !operacion || (operacion !== 'incrementar' && operacion !== 'disminuir')) {
         return res.status(400).json({ error: 'Parámetros inválidos' });
@@ -495,7 +530,7 @@ router.patch('/:id/stock', async (req, res) => {
             }
         }
         
-        await db.query('UPDATE productos SET stock_total = $1 WHERE id = $2', [nuevoStock, id]);
+        await db.query('UPDATE productos SET stock_total = $1, fecha_modificacion = NOW(), modificado_por = $2 WHERE id = $3', [nuevoStock, auditUser.userName, id]);
         
         res.json({ 
             message: 'Stock actualizado exitosamente',
@@ -511,7 +546,7 @@ router.patch('/:id/stock', async (req, res) => {
 // =============================================
 // RUTA 7: Productos con stock bajo
 // =============================================
-router.get('/alertas/stock-bajo', async (req, res) => {
+router.get('/alertas/stock-bajo', requireAdmin, async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -520,9 +555,9 @@ router.get('/alertas/stock-bajo', async (req, res) => {
                 nombre,
                 stock_total,
                 stock_minimo_alerta,
-                (stock_total - stock_minimo_alerta) as diferencia
+                (stock_total - COALESCE(stock_minimo_alerta, 0)) as diferencia
             FROM productos 
-            WHERE stock_total <= stock_minimo_alerta 
+            WHERE stock_total = 0 OR stock_total <= COALESCE(stock_minimo_alerta, 0)
             ORDER BY diferencia ASC
         `;
         
@@ -535,3 +570,4 @@ router.get('/alertas/stock-bajo', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.shouldShowInLowStockList = shouldShowInLowStockList;

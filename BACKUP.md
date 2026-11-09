@@ -18,3 +18,5 @@ Notes:
 - Do not store backups inside the project repository.
 - Replace `<DB_PASSWORD>`, `<DB_HOST>`, `<DB_PORT>` and `<DB_NAME>` with real values.
 - Use DBeaver export if you prefer a GUI.
+- Administrators can download a `.dump` backup from the app using **Respaldar BD**. The server requires `pg_dump` to be available in `PATH`; otherwise set `PG_DUMP_PATH` to the full path of `pg_dump.exe`.
+- Daily mirror to Supabase: see [`SUPABASE.md`](./SUPABASE.md).

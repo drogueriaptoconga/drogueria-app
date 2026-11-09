@@ -1,53 +1,88 @@
 # Droguería App
 
-Proyecto fullstack (Express + React) usado en la Droguería.
+Aplicación fullstack (Express + React) para inventario y ventas de la droguería.
 
-Quick start (developer machine):
+## Documentación
 
-1. Clona el repo:
+- [`SETUP.md`](./SETUP.md): montar el proyecto en otra máquina y flujo entre desarrollo y producción.
+- [`SUPABASE.md`](./SUPABASE.md): respaldo espejo en Supabase.
+- [`BACKUP.md`](./BACKUP.md): respaldos locales con `pg_dump`.
+- [`AGENTS.md`](./AGENTS.md) y [`HANDOFF.md`](./HANDOFF.md): guía y bitácora para agentes.
+
+## Inicio rápido
+
+1. Clonar el repo:
 
 ```bash
-git clone https://github.com/<tu-usuario>/<repo>.git
-cd <repo>
+git clone https://github.com/drogueriaptoconga/drogueria-app.git
+cd drogueria-app
 ```
 
-2. Instala dependencias backend:
+2. Instalar dependencias del backend:
 
 ```bash
 npm install
 ```
 
-3. Instala dependencias frontend:
+3. Instalar dependencias del frontend:
 
 ```bash
 cd fronted
 npm install
+cd ..
 ```
 
-4. Crea un archivo `.env` en la raíz con los datos reales (NO subirlo):
+4. Crear el `.env` desde `.env.example` (NO se versiona):
 
-```
-DB_HOST=<IP_o_hostname_del_cliente>
+```env
+DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=<contraseña_real>
-DB_NAME=drogueria_db
+DB_PASSWORD=tu_password
+DB_NAME=drogueria_app
 DB_SSL=false
 ```
 
-5. Ejecuta backend:
+5. Preparar la base local. La opción recomendada es restaurar desde Supabase o desde un dump; ver [`SETUP.md`](./SETUP.md).
+
+6. Aplicar migraciones:
+
+```bash
+npm run db:migrate:local
+# Si vas a actualizar también Supabase:
+npm run db:migrate:supabase
+```
+
+7. Ejecutar el backend:
 
 ```bash
 npm run dev
 ```
 
-6. Ejecuta frontend (en otra terminal):
+8. Ejecutar el frontend (otra terminal):
 
 ```bash
 cd fronted
 npm start
 ```
 
-Security notes:
-- Do not commit `.env` or backups to the repository.
-- Use the `.env.example` as template.
+## Base de datos y Supabase
+
+- La app usa el PostgreSQL local por defecto.
+- `DATABASE_URL` tiene prioridad sobre `DB_*`. No la apuntes a Supabase salvo que quieras que la app use Supabase como base principal.
+- El respaldo de datos a Supabase se ejecuta con `npm run db:supabase:sync` o con el botón **“Sincronizar ahora”** del admin.
+- `SUPABASE_SYNC_ENABLED=true` solo debe estar en la máquina de producción. En desarrollo déjalo en `false` para no sobrescribir el espejo de producción.
+- Las migraciones de esquema sí se pueden aplicar a Supabase desde desarrollo con `npm run db:migrate:supabase`.
+
+## Usuarios
+
+- Las contraseñas usan `scrypt` (`utils/passwords.js`).
+- Si necesitas resetear la clave del Admin: `node scripts/reset-admin-password.js` (interactivo, sin eco).
+- Los vendedores se crean desde la pantalla **Usuarios** y deben cambiar la clave en el primer ingreso.
+- Las sesiones son tokens Bearer en memoria, duran 8 horas y se pierden al reiniciar el backend.
+
+## Seguridad
+
+- No commitear `.env`, dumps, logs ni `node_modules`.
+- No compartir la `SUPABASE_DATABASE_URL` ni la `service_role`/secret key.
+- Si una clave se compartió por chat, rotarla en el dashboard de Supabase.

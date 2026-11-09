@@ -33,6 +33,7 @@ const useProductosLogic = () => {
     const [autoLoadProduct, setAutoLoadProduct] = useState(null);
 
     const searchRef = useRef(null);
+    const searchRequestRef = useRef(0);
 
     // Función para mostrar mensajes globales
     const showGlobalMessage = (message, type = 'success', duration = 5000) => {
@@ -56,6 +57,7 @@ const useProductosLogic = () => {
     };
 
     const fetchProductos = useCallback(async (term = '', expired = false, warning = false) => {
+        const requestId = ++searchRequestRef.current;
         try {
             setIsLoading(true);
             let url = `http://localhost:3001/api/productos?search=${encodeURIComponent(term)}`;
@@ -64,6 +66,7 @@ const useProductosLogic = () => {
             if (showLowStock) url += '&lowStock=true';
             
             const response = await axios.get(url);
+            if (requestId !== searchRequestRef.current) return;
             const fetchedProductos = response.data;
             setProductos(fetchedProductos);
             
@@ -133,23 +136,13 @@ const useProductosLogic = () => {
         }
 
         if (result.venta_exclusiva_sobre) {
-            if (result.unidades_por_sobre && result.costo_unidad && result.precio_solo_sobre) {
-                const costoSobre = result.costo_unidad * result.unidades_por_sobre;
-                result.margen_solo_sobre = calcAndFormatMargin(costoSobre, result.precio_solo_sobre);
-            } else {
-                result.margen_solo_sobre = calcAndFormatMargin(result.costo_unidad, result.precio_solo_sobre);
-            }
+            result.margen_solo_sobre = calcAndFormatMargin(result.costo_unidad, result.precio_solo_sobre);
         } else {
             result.margen_solo_sobre = '';
         }
 
         if (result.venta_exclusiva_caja) {
-            if (result.unidades_por_caja && result.costo_unidad && result.precio_solo_caja) {
-                const costoCaja = result.costo_unidad * result.unidades_por_caja;
-                result.margen_solo_caja = calcAndFormatMargin(costoCaja, result.precio_solo_caja);
-            } else {
-                result.margen_solo_caja = calcAndFormatMargin(result.costo_unidad, result.precio_solo_caja);
-            }
+            result.margen_solo_caja = calcAndFormatMargin(result.costo_unidad, result.precio_solo_caja);
         } else {
             result.margen_solo_caja = '';
         }
@@ -177,16 +170,19 @@ const useProductosLogic = () => {
         const { name, value, type, checked } = e.target;
         let newForm = { ...form };
 
+        if (name === 'codigo_producto') {
+            setProductExistsModal({ show: false, product: null, formData: null, context: 'create' });
+            setFormMessage(null);
+        }
+
         if (type === 'checkbox') {
             newForm[name] = checked;
             
             if (name === 'venta_exclusiva_sobre' && checked) {
-                newForm.venta_exclusiva_caja = false;
                 newForm.venta_por_unidad_habilitada = false;
                 newForm.vender_por_sobre = false;
                 newForm.vender_por_caja = false;
             } else if (name === 'venta_exclusiva_caja' && checked) {
-                newForm.venta_exclusiva_sobre = false;
                 newForm.venta_por_unidad_habilitada = false;
                 newForm.vender_por_sobre = false;
                 newForm.vender_por_caja = false;
@@ -449,6 +445,8 @@ const useProductosLogic = () => {
     };
 
     const handleClear = () => {
+        searchRequestRef.current += 1;
+        setProductExistsModal({ show: false, product: null, formData: null, context: 'create' });
         resetFormState();
         setShowForm(false);
         showGlobalMessage('Formulario cancelado', 'info');

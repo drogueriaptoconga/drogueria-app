@@ -11,6 +11,8 @@ const PuntoDeVenta = () => {
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [message, setMessage] = useState(null);
     const [montoPagado, setMontoPagado] = useState('');
+    const [montoEfectivo, setMontoEfectivo] = useState('');
+    const [montoTransferencia, setMontoTransferencia] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [clienteData, setClienteData] = useState({ nombre: '', cedula: '', correo: '', celular: '' });
     const [conFactura, setConFactura] = useState(false);
@@ -21,8 +23,8 @@ const PuntoDeVenta = () => {
 
     const searchInputRef = useRef(null);
     const searchResultsRef = useRef(null);
-    const processSaleButtonRef = useRef(null);
-    const confirmButtonRef = useRef(null);
+    const submitLockRef = useRef(false);
+    const cartRef = useRef([]);
 
     const showMessage = (text, type = 'success') => {
         setMessage({ text, type });
@@ -47,7 +49,9 @@ const PuntoDeVenta = () => {
 
     const handleSearchKeyDown = async (e) => {
         if (e.key === 'Enter') {
+            // El lector termina cada codigo con Enter; evita que llegue al manejador global o al modal.
             e.preventDefault();
+            e.stopPropagation();
             if (searchTerm.trim() !== '') {
                 try {
                     const response = await axios.get(`http://localhost:3001/api/productos?search=${searchTerm}`);
@@ -67,8 +71,8 @@ const PuntoDeVenta = () => {
     const addToCart = (product) => {
         const availableOptions = getAvailableTipoVentaOptions(product);
 
-        // Filtrar opciones que ya están en el carrito
-        const usedOptions = cart
+        const currentCart = cartRef.current;
+        const usedOptions = currentCart
             .filter(item => item.id === product.id)
             .map(item => item.tipo_venta);
 
@@ -80,23 +84,33 @@ const PuntoDeVenta = () => {
         }
 
         const defaultTipoVenta = remainingOptions[0];
+        const newItem = { ...product, cantidad_vendida: 1, tipo_venta: defaultTipoVenta };
+        const updatedCart = [...currentCart, newItem];
 
-        setCart([...cart, { ...product, cantidad_vendida: 1, tipo_venta: defaultTipoVenta }]);
+        cartRef.current = updatedCart;
+        setCart(updatedCart);
         setSearchTerm('');
         setSearchResults([]);
         showMessage(`Producto añadido al carrito en modo ${defaultTipoVenta}.`);
-        setActiveCartItemIndex(cart.length);
+        setActiveCartItemIndex(updatedCart.length - 1);
+
+        if (searchInputRef.current) {
+            searchInputRef.current.focus();
+        }
     };
 
     const handleQuantityChange = useCallback((id, change) => {
         const updatedCart = cart.map(item =>
             item.id === id ? { ...item, cantidad_vendida: Math.max(1, item.cantidad_vendida + change) } : item
         );
+        cartRef.current = updatedCart;
         setCart(updatedCart);
     }, [cart]);
 
     const handleRemoveFromCart = (id) => {
-        setCart(cart.filter(item => item.id !== id));
+        const updatedCart = cart.filter(item => item.id !== id);
+        cartRef.current = updatedCart;
+        setCart(updatedCart);
         showMessage('Producto eliminado del carrito.');
     };
 
@@ -104,6 +118,7 @@ const PuntoDeVenta = () => {
         const updatedCart = cart.map(item =>
             item.id === id ? { ...item, tipo_venta: tipo } : item
         );
+        cartRef.current = updatedCart;
         setCart(updatedCart);
     };
 
@@ -116,6 +131,10 @@ const PuntoDeVenta = () => {
     }, [cart]);
 
     const confirmarVenta = useCallback(async () => {
+        if (submitLockRef.current || isLoading) {
+            return;
+        }
+
         const montoNumerico = parseFloat(montoPagado);
         const clienteNombre = clienteData.nombre.trim();
         const clienteCorreo = clienteData.correo.trim();
@@ -125,7 +144,10 @@ const PuntoDeVenta = () => {
             return;
         }
         
-        // Validación para Efectivo
+        const efectivoMixto = parseFloat(montoEfectivo) || 0;
+        const transferenciaMixta = parseFloat(montoTransferencia) || 0;
+
+        // Validación para efectivo y pagos mixtos
         if (metodoPago === 'Efectivo') {
             if (isNaN(montoNumerico) || montoNumerico <= 0) {
                 showMessage('El monto pagado no puede ser cero.', 'error');
@@ -133,6 +155,15 @@ const PuntoDeVenta = () => {
             }
             if (montoNumerico < montoTotal) {
                 showMessage('El monto pagado es insuficiente.', 'error');
+                return;
+            }
+        } else if (metodoPago === 'Mixto') {
+            if (efectivoMixto <= 0 || transferenciaMixta <= 0) {
+                showMessage('Ingresa un valor mayor que cero para efectivo y transferencia.', 'error');
+                return;
+            }
+            if (Math.round((efectivoMixto + transferenciaMixta) * 100) !== Math.round(montoTotal * 100)) {
+                showMessage('La suma de efectivo y transferencia debe ser igual al total.', 'error');
                 return;
             }
         }
@@ -148,13 +179,14 @@ const PuntoDeVenta = () => {
         const ventaData = {
             usuario_id: 1,
             metodo_pago: metodoPago,
-            monto_efectivo: metodoPago === 'Efectivo' ? montoTotal : 0,
-            monto_transferencia: metodoPago === 'Transferencia' ? montoTotal : 0,
+            monto_efectivo: metodoPago === 'Efectivo' ? montoTotal : metodoPago === 'Mixto' ? efectivoMixto : 0,
+            monto_transferencia: metodoPago === 'Transferencia' ? montoTotal : metodoPago === 'Mixto' ? transferenciaMixta : 0,
             productos: ventaProductos
         };
 
         console.log('📦 Enviando venta:', JSON.stringify(ventaData, null, 2));
 
+        submitLockRef.current = true;
         setIsLoading(true);
 
         try {
@@ -187,9 +219,12 @@ const PuntoDeVenta = () => {
             setFacturaVenta(factura);
             setShowFactura(conFactura);
             showMessage('✅ Venta procesada exitosamente!');
+            cartRef.current = [];
             setCart([]);
             setMontoTotal(0);
             setMontoPagado('');
+            setMontoEfectivo('');
+            setMontoTransferencia('');
             setShowConfirmation(false);
             
             if (searchInputRef.current) {
@@ -218,13 +253,16 @@ const PuntoDeVenta = () => {
             showMessage(`❌ ${errorMessage}`, 'error');
             setShowConfirmation(false);
         } finally {
+            submitLockRef.current = false;
             setIsLoading(false);
         }
-    }, [metodoPago, montoPagado, montoTotal, cart, clienteData]);
+    }, [metodoPago, montoPagado, montoEfectivo, montoTransferencia, montoTotal, cart, clienteData, conFactura, isLoading]);
 
     const cancelarVenta = () => {
         setShowConfirmation(false);
         setMontoPagado('');
+        setMontoEfectivo('');
+        setMontoTransferencia('');
         if (searchInputRef.current) {
             searchInputRef.current.focus();
         }
@@ -288,42 +326,6 @@ const PuntoDeVenta = () => {
                     setSearchResults([]);
                     setSearchTerm('');
                 }
-            } else if (e.key === 'Enter') {
-                const active = document.activeElement;
-
-                if (searchInputRef.current && searchInputRef.current.contains(active)) return;
-
-                if (showConfirmation) {
-                    if (cart.length === 0) return;
-
-                    const modalOverlays = document.querySelectorAll('.modal-overlay');
-                    if (modalOverlays && modalOverlays.length > 1) return;
-
-                    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-                        if (!(active.id === 'montoPagado' || (confirmButtonRef.current && confirmButtonRef.current.contains(active)))) return;
-                    }
-
-                    e.preventDefault();
-                    confirmarVenta();
-                } else {
-                    if (cart.length === 0) return;
-
-                    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-                        return;
-                    }
-
-                    e.preventDefault();
-                    handleProcesarVenta();
-                }
-            } else if (e.key === ' ') {
-                if (document.activeElement !== searchInputRef.current) {
-                    if (cart.length === 0) return;
-                    if (showConfirmation) {
-                        confirmarVenta();
-                    } else {
-                        handleProcesarVenta();
-                    }
-                }
             } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault();
                 if (cart.length > 0 && document.activeElement !== searchInputRef.current) {
@@ -348,11 +350,23 @@ const PuntoDeVenta = () => {
         };
     }, [showConfirmation, activeCartItemIndex, cart, confirmarVenta, handleProcesarVenta, handleQuantityChange]);
 
+    const efectivoMixto = parseFloat(montoEfectivo) || 0;
+    const transferenciaMixta = parseFloat(montoTransferencia) || 0;
     const vuelto = montoPagado && parseFloat(montoPagado) > montoTotal ? parseFloat(montoPagado) - montoTotal : 0;
 
     // Función para determinar las opciones de tipo de venta disponibles
     const getAvailableTipoVentaOptions = (product) => {
         const options = [];
+
+        if (product.venta_exclusiva_sobre || product.venta_exclusiva_caja) {
+            if (product.venta_exclusiva_sobre && product.precio_solo_sobre > 0 && product.cantidad_solo_sobre > 0) {
+                options.push('Solo Sobre');
+            }
+            if (product.venta_exclusiva_caja && product.precio_solo_caja > 0 && product.cantidad_solo_caja > 0) {
+                options.push('Solo Caja');
+            }
+            return options;
+        }
         
         if (product.precio_unidad && product.precio_unidad > 0) {
             options.push('Unidad');
@@ -516,6 +530,15 @@ const PuntoDeVenta = () => {
                             <label>
                                 <input
                                     type="radio"
+                                    value="Mixto"
+                                    checked={metodoPago === 'Mixto'}
+                                    onChange={() => setMetodoPago('Mixto')}
+                                />
+                                Mixto
+                            </label>
+                            <label>
+                                <input
+                                    type="radio"
                                     value="Transferencia"
                                     checked={metodoPago === 'Transferencia'}
                                     onChange={() => setMetodoPago('Transferencia')}
@@ -536,7 +559,6 @@ const PuntoDeVenta = () => {
                         <button
                             className="process-sale-btn"
                             onClick={handleProcesarVenta}
-                            ref={processSaleButtonRef}
                             disabled={cart.length === 0 || isLoading}
                             title={cart.length === 0 ? 'Agrega al menos un producto para procesar la venta' : 'Procesar venta'}
                         >
@@ -564,10 +586,36 @@ const PuntoDeVenta = () => {
                                             step="0.01"
                                             value={montoPagado}
                                             onChange={(e) => setMontoPagado(e.target.value)}
-                                            autoFocus
                                         />
                                     </div>
                                     <p className="vuelto"><strong>Vuelto:</strong> ${vuelto}</p>
+                                </>
+                            )}
+                            {metodoPago === 'Mixto' && (
+                                <>
+                                    <div className="modal-input-group">
+                                        <label htmlFor="montoEfectivo">Parte en efectivo:</label>
+                                        <input
+                                            id="montoEfectivo"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={montoEfectivo}
+                                            onChange={(e) => setMontoEfectivo(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="modal-input-group">
+                                        <label htmlFor="montoTransferencia">Parte en transferencia:</label>
+                                        <input
+                                            id="montoTransferencia"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={montoTransferencia}
+                                            onChange={(e) => setMontoTransferencia(e.target.value)}
+                                        />
+                                    </div>
+                                    <p><strong>Total recibido:</strong> ${(efectivoMixto + transferenciaMixta).toFixed(2)}</p>
                                 </>
                             )}
                             {conFactura ? (
@@ -602,10 +650,10 @@ const PuntoDeVenta = () => {
                             </ul>
                         </div>
                         <div className="modal-buttons">
-                            <button className="btn-confirm" onClick={confirmarVenta} ref={confirmButtonRef} disabled={isLoading}>
+                            <button type="button" className="btn-confirm" onClick={confirmarVenta} disabled={isLoading}>
                                 {isLoading ? 'Procesando...' : 'Confirmar'}
                             </button>
-                            <button className="btn-cancel" onClick={cancelarVenta}>Cancelar</button>
+                            <button type="button" className="btn-cancel" onClick={cancelarVenta}>Cancelar</button>
                         </div>
                     </div>
                 </div>

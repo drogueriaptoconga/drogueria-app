@@ -3,9 +3,35 @@ const router = express.Router();
 const db = require('../db');
 const { requireAdmin } = require('../middleware/roles');
 
+async function syncSequenceByName(client, tableName) {
+    const maxResult = await client.query(`SELECT COALESCE(MAX(id), 0) AS max_id FROM ${tableName}`);
+    const maxId = parseInt(maxResult.rows[0]?.max_id || '0', 10);
+    const sequenceName = `public.${tableName}_id_seq`;
+    await client.query('SELECT setval($1, $2, true)', [sequenceName, maxId]);
+}
+
+async function syncVentaSequence(client) {
+    await syncSequenceByName(client, 'ventas');
+}
+
+async function syncDetalleVentaSequence(client) {
+    await syncSequenceByName(client, 'detalle_venta');
+}
+
 function calcularDetalleVenta(producto, item) {
     const cantidadVendida = Number(item.cantidad_vendida) || 0;
     const tipoVenta = item.tipo_venta;
+    const tiposExclusivos = [];
+    if (producto.venta_exclusiva_sobre === true) tiposExclusivos.push('Solo Sobre');
+    if (producto.venta_exclusiva_caja === true) tiposExclusivos.push('Solo Caja');
+
+    if (tiposExclusivos.length > 0 && !tiposExclusivos.includes(tipoVenta)) {
+        throw new Error(`El producto solo puede venderse por ${tiposExclusivos.join(' o ')}`);
+    }
+
+    if (!Number.isInteger(cantidadVendida) || cantidadVendida <= 0) {
+        throw new Error('La cantidad vendida debe ser un entero positivo');
+    }
 
     let precioVentaPorItem = 0;
     let unidadesADescontar = 0;
@@ -37,12 +63,39 @@ function calcularDetalleVenta(producto, item) {
             throw new Error('Tipo de venta no válido');
     }
 
+    if (!Number.isFinite(precioVentaPorItem) || precioVentaPorItem <= 0) {
+        throw new Error(`El producto no tiene un precio válido para venta por ${tipoVenta}`);
+    }
+    if (!Number.isFinite(unidadesADescontar) || unidadesADescontar <= 0) {
+        throw new Error(`El producto no tiene una cantidad válida para venta por ${tipoVenta}`);
+    }
+
     return { precioVentaPorItem, unidadesADescontar };
+}
+
+function validarDesglosePago(metodoPago, montoTotal, montoEfectivo, montoTransferencia) {
+    const total = Math.round(Number(montoTotal) * 100);
+    const efectivo = Math.round((Number(montoEfectivo) || 0) * 100);
+    const transferencia = Math.round((Number(montoTransferencia) || 0) * 100);
+
+    if (!['Efectivo', 'Transferencia', 'Mixto'].includes(metodoPago)) {
+        throw new Error('Método de pago no válido');
+    }
+    if (metodoPago === 'Mixto' && (efectivo <= 0 || transferencia <= 0)) {
+        throw new Error('Un pago mixto debe incluir efectivo y transferencia');
+    }
+    if (metodoPago !== 'Mixto' && efectivo + transferencia !== total) {
+        throw new Error('El desglose del pago no coincide con el total de la venta');
+    }
+    if (metodoPago === 'Mixto' && efectivo + transferencia !== total) {
+        throw new Error('La suma de efectivo y transferencia debe ser igual al total');
+    }
 }
 
 // Ruta para crear una nueva venta
 router.post('/', async (req, res) => {
-    const { usuario_id, metodo_pago, monto_efectivo, monto_transferencia, productos } = req.body;
+    const { metodo_pago, monto_efectivo, monto_transferencia, productos } = req.body;
+    const usuario_id = req.user.id;
 
     // Obtener un cliente de la conexión para la transacción
     const client = await db.pool.connect();
@@ -50,6 +103,10 @@ router.post('/', async (req, res) => {
     try {
         // Iniciar la transacción
         await client.query('BEGIN');
+
+        // Sincronizar las secuencias que alimentan las PK para evitar IDs duplicados por desfasaje del SERIAL
+        await syncVentaSequence(client);
+        await syncDetalleVentaSequence(client);
 
         // 1. Calcular el monto total de la venta
         const productIds = productos.map(p => p.producto_id);
@@ -76,14 +133,31 @@ router.post('/', async (req, res) => {
             }
         }
         monto_total = Math.round(monto_total);
+
+        validarDesglosePago(metodo_pago, monto_total, monto_efectivo, monto_transferencia);
         
         // 2. Insertar la venta en la tabla `ventas`
-        const ventaResult = await client.query(
-            `INSERT INTO ventas (usuario_id, fecha_venta, metodo_pago, monto_total, monto_efectivo, monto_transferencia) 
-             VALUES ($1, NOW(), $2, $3, $4, $5) 
-             RETURNING id`,
-            [usuario_id, metodo_pago, monto_total, monto_efectivo, monto_transferencia]
-        );
+        let ventaResult;
+        try {
+            ventaResult = await client.query(
+                `INSERT INTO ventas (usuario_id, fecha_venta, metodo_pago, monto_total, monto_efectivo, monto_transferencia) 
+                 VALUES ($1, NOW(), $2, $3, $4, $5) 
+                 RETURNING id`,
+                [usuario_id, metodo_pago, monto_total, monto_efectivo, monto_transferencia]
+            );
+        } catch (error) {
+            if (error?.code === '23505' && /ventas_pkey/i.test(error.message || '')) {
+                await syncVentaSequence(client);
+                ventaResult = await client.query(
+                    `INSERT INTO ventas (usuario_id, fecha_venta, metodo_pago, monto_total, monto_efectivo, monto_transferencia) 
+                     VALUES ($1, NOW(), $2, $3, $4, $5) 
+                     RETURNING id`,
+                    [usuario_id, metodo_pago, monto_total, monto_efectivo, monto_transferencia]
+                );
+            } else {
+                throw error;
+            }
+        }
         const ventaId = ventaResult.rows[0].id;
 
         // 3. Insertar cada producto vendido en `detalle_venta` y actualizar el stock
@@ -92,11 +166,24 @@ router.post('/', async (req, res) => {
 
             const { precioVentaPorItem, unidadesADescontar } = calcularDetalleVenta(producto, item);
 
-            await client.query(
-                `INSERT INTO detalle_venta (venta_id, producto_id, cantidad_vendida, precio_venta, tipo_venta) 
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [ventaId, item.producto_id, item.cantidad_vendida, precioVentaPorItem, item.tipo_venta]
-            );
+            try {
+                await client.query(
+                    `INSERT INTO detalle_venta (venta_id, producto_id, cantidad_vendida, precio_venta, tipo_venta) 
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [ventaId, item.producto_id, item.cantidad_vendida, precioVentaPorItem, item.tipo_venta]
+                );
+            } catch (error) {
+                if (error?.code === '23505' && /detalle_venta_pkey/i.test(error.message || '')) {
+                    await syncDetalleVentaSequence(client);
+                    await client.query(
+                        `INSERT INTO detalle_venta (venta_id, producto_id, cantidad_vendida, precio_venta, tipo_venta) 
+                         VALUES ($1, $2, $3, $4, $5)`,
+                        [ventaId, item.producto_id, item.cantidad_vendida, precioVentaPorItem, item.tipo_venta]
+                    );
+                } else {
+                    throw error;
+                }
+            }
 
             await client.query(
                 `UPDATE productos SET stock_total = stock_total - $1 WHERE id = $2`,
@@ -123,7 +210,7 @@ router.post('/', async (req, res) => {
 router.put('/:id/anular', requireAdmin, async (req, res) => {
     const ventaId = req.params.id;
     const motivoAnulacion = (req.body.motivo_anulacion || '').trim();
-    const usuarioAnulacionId = parseInt(req.get('x-user-id')) || null;
+    const usuarioAnulacionId = req.user.id;
 
     if (!motivoAnulacion) {
         return res.status(400).json({ error: 'Se requiere un motivo de anulación.' });
@@ -209,3 +296,5 @@ router.put('/:id/anular', requireAdmin, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.validarDesglosePago = validarDesglosePago;
+module.exports.calcularDetalleVenta = calcularDetalleVenta;

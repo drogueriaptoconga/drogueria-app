@@ -1,7 +1,7 @@
 import React from 'react';
 import { getExpirationStatus, formatDate, formatPrice } from './productUtils';
 
-const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoading }) => {
+const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoading, canManage = true }) => {
     const renderExpirationStatus = (producto) => {
         const status = getExpirationStatus(producto.fecha_vencimiento, producto.dias_alerta_vencimiento);
         
@@ -29,9 +29,11 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
 
     const filteredProductos = productos.filter(p => {
         if (showLowStock) {
-            return p.stock_minimo_alerta !== null && p.stock_minimo_alerta !== '' &&
-                   p.fecha_vencimiento &&
-                   p.stock_total <= p.stock_minimo_alerta;
+            const stockTotal = Number(p.stock_total) || 0;
+            const stockMinimo = p.stock_minimo_alerta === null || p.stock_minimo_alerta === undefined || p.stock_minimo_alerta === ''
+                ? 0
+                : Number(p.stock_minimo_alerta) || 0;
+            return stockTotal === 0 || stockTotal <= stockMinimo;
         }
         return true;
     });
@@ -52,24 +54,28 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
                             <th>Nombre</th>
                             <th>Stock</th>
                             <th>Modo Venta</th>
-                            <th>Costo</th>
+                            {canManage && <th>Costo</th>}
                             <th>P. Unidad</th>
                             <th>P. Sobre</th>
                             <th>P. Caja</th>
                             <th>P. Solo Sobre</th>
                             <th>P. Solo Caja</th>
-                            <th>Margen U.</th>
-                            <th>Margen S.</th>
-                            <th>Margen C.</th>
+                            {canManage && <th>Margen U.</th>}
+                            {canManage && <th>Margen S.</th>}
+                            {canManage && <th>Margen C.</th>}
                             <th>Fecha Venc.</th>
                             <th>Estado</th>
-                            <th>Acciones</th>
+                            {canManage && <th>Acciones</th>}
                         </tr>
                     </thead>
                     <tbody>
                         {filteredProductos.map(producto => {
                             const expirationStatus = getExpirationStatus(producto.fecha_vencimiento, producto.dias_alerta_vencimiento);
-                            const isLowStock = producto.stock_total <= producto.stock_minimo_alerta;
+                            const stockTotal = Number(producto.stock_total) || 0;
+                            const stockMinimo = producto.stock_minimo_alerta === null || producto.stock_minimo_alerta === undefined || producto.stock_minimo_alerta === ''
+                                ? 0
+                                : Number(producto.stock_minimo_alerta) || 0;
+                            const isLowStock = stockTotal === 0 || stockTotal <= stockMinimo;
                             
                             const rowClass = expirationStatus === 'expired' ? 'expired-row' : 
                                              expirationStatus === 'warning' ? 'warning-row' : 
@@ -84,18 +90,18 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
                                         {isLowStock && ' ⚠️'}
                                     </td>
                                     <td>{renderSaleMode(producto)}</td>
-                                    <td>{formatPrice(producto.costo_unidad)}</td>
+                                    {canManage && <td>{formatPrice(producto.costo_unidad)}</td>}
                                     <td>{producto.venta_por_unidad_habilitada ? formatPrice(producto.precio_unidad) : 'N/A'}</td>
                                     <td>{producto.vender_por_sobre ? formatPrice(producto.precio_por_sobre) : 'N/A'}</td>
                                     <td>{producto.vender_por_caja ? formatPrice(producto.precio_por_caja) : 'N/A'}</td>
                                     <td>{producto.venta_exclusiva_sobre ? formatPrice(producto.precio_solo_sobre) : 'N/A'}</td>
                                     <td>{producto.venta_exclusiva_caja ? formatPrice(producto.precio_solo_caja) : 'N/A'}</td>
-                                    <td>{producto.margen_porcentaje ? `${parseFloat(producto.margen_porcentaje).toFixed(1)}%` : 'N/A'}</td>
-                                    <td>{producto.margen_sobre ? `${parseFloat(producto.margen_sobre).toFixed(1)}%` : 'N/A'}</td>
-                                    <td>{producto.margen_caja ? `${parseFloat(producto.margen_caja).toFixed(1)}%` : 'N/A'}</td>
+                                    {canManage && <td>{producto.margen_porcentaje ? `${parseFloat(producto.margen_porcentaje).toFixed(1)}%` : 'N/A'}</td>}
+                                    {canManage && <td>{producto.margen_sobre ? `${parseFloat(producto.margen_sobre).toFixed(1)}%` : 'N/A'}</td>}
+                                    {canManage && <td>{producto.margen_caja ? `${parseFloat(producto.margen_caja).toFixed(1)}%` : 'N/A'}</td>}
                                     <td>{formatDate(producto.fecha_vencimiento)}</td>
                                     <td>{renderExpirationStatus(producto)}</td>
-                                    <td>
+                                    {canManage && <td>
                                         <button 
                                             className="edit-button" 
                                             onClick={() => handleEdit(producto)}
@@ -110,7 +116,7 @@ const ProductTable = ({ productos, showLowStock, handleEdit, handleDelete, isLoa
                                         >
                                             Eliminar
                                         </button>
-                                    </td>
+                                    </td>}
                                 </tr>
                             );
                         })}

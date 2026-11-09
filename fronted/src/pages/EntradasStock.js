@@ -42,17 +42,22 @@ const EntradasStock = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     const searchRef = useRef(null);
+    const searchRequestIdRef = useRef(0);
 
     // Buscar productos
     const handleSearch = async (e) => {
         const query = e.target.value;
         setSearchTerm(query);
+        const requestId = ++searchRequestIdRef.current;
         
         if (query.length > 2) {
             try {
                 const response = await axios.get(`http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}`);
-                setSearchResults(response.data);
+                if (requestId === searchRequestIdRef.current) {
+                    setSearchResults(response.data);
+                }
             } catch (error) {
+                if (requestId !== searchRequestIdRef.current) return;
                 console.error('Error al buscar productos:', error);
                 setMensaje({ tipo: 'error', texto: 'Error al buscar productos' });
             }
@@ -61,8 +66,47 @@ const EntradasStock = () => {
         }
     };
 
+    const handleSearchKeyDown = async (e) => {
+        if (e.key !== 'Enter') return;
+
+        e.preventDefault();
+        const query = searchTerm.trim();
+        if (query.length < 2) return;
+
+        const requestId = ++searchRequestIdRef.current;
+        try {
+            const exactResponse = await axios.get(
+                `http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}&codigo_exacto=true`
+            );
+            if (requestId !== searchRequestIdRef.current) return;
+
+            if (exactResponse.data.length === 1) {
+                handleSelectProduct(exactResponse.data[0]);
+                return;
+            }
+
+            if (exactResponse.data.length > 1) {
+                setSearchResults(exactResponse.data);
+                setMensaje({ tipo: 'error', texto: 'Hay varios productos con ese código. Selecciona el correcto de la lista.' });
+                return;
+            }
+
+            const searchResponse = await axios.get(
+                `http://localhost:3001/api/entradas/buscar?query=${encodeURIComponent(query)}`
+            );
+            if (requestId === searchRequestIdRef.current) {
+                setSearchResults(searchResponse.data);
+            }
+        } catch (error) {
+            if (requestId !== searchRequestIdRef.current) return;
+            console.error('Error al buscar producto por código:', error);
+            setMensaje({ tipo: 'error', texto: 'Error al buscar el producto' });
+        }
+    };
+
     // Seleccionar producto
     const handleSelectProduct = (product) => {
+        searchRequestIdRef.current += 1;
         setSelectedProduct(product);
         setSearchTerm(`${product.codigo_producto} - ${product.nombre}`);
         setSearchResults([]);
@@ -607,6 +651,7 @@ const EntradasStock = () => {
                         placeholder="🔍 Buscar producto por código o nombre..."
                         value={searchTerm}
                         onChange={handleSearch}
+                        onKeyDown={handleSearchKeyDown}
                         className="search-input"
                     />
                     {searchResults.length > 0 && (

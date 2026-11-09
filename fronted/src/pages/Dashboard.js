@@ -6,15 +6,20 @@ import './Dashboard.css';
 import { getCurrentUser, getAuthHeaders } from '../auth';
 
 const Dashboard = () => {
+    const today = new Date();
+    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const [selectedDate, setSelectedDate] = useState(todayValue);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
     const [dashboardData, setDashboardData] = useState({
         ventasDelDia: 0,
         ventasEfectivo: 0,
         ventasTransferencia: 0,
-        capitalInvertido: 0,
-        gananciaPotencial: 0,
+        ventasMixto: 0,
+        promedioMensual: 0,
+        promedioDiaConVenta: 0,
+        porcentajeTransferencia: 0,
         gananciaBrutaDiaria: 0,
         gastosDiarios: 0,
-        inversionDiaria: 0,
         gananciaNetaDiaria: 0,
         ventasSemana: []
     });
@@ -28,16 +33,20 @@ const Dashboard = () => {
             try {
                 const [
                     ventasResponse,
-                    capitalResponse,
-                    gananciaPotencialResponse,
                     gananciaDiariaResponse,
-                    ventasSemanaResponse
+                    ventasSemanaResponse,
+                    promedioMensualResponse
                 ] = await Promise.all([
-                    axios.get('http://localhost:3001/api/reportes/ventas_diarias', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/capital_invertido', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/ganancia_potencial', { headers: getAuthHeaders() }),
+                    axios.get('http://localhost:3001/api/reportes/ventas_diarias', {
+                        params: {
+                            fecha: selectedDate,
+                            ...(selectedPaymentMethod ? { metodo_pago: selectedPaymentMethod } : {})
+                        },
+                        headers: getAuthHeaders()
+                    }),
                     axios.get('http://localhost:3001/api/reportes/ganancia_diaria', { headers: getAuthHeaders() }),
-                    axios.get('http://localhost:3001/api/reportes/ventas_semana', { headers: getAuthHeaders() })
+                    axios.get('http://localhost:3001/api/reportes/ventas_semana', { headers: getAuthHeaders() }),
+                    axios.get('http://localhost:3001/api/reportes/promedio_mensual', { headers: getAuthHeaders() })
                 ]);
 
                 const ventasBrutaDiaria = parseFloat(gananciaDiariaResponse.data.ganancia_bruta_diaria || gananciaDiariaResponse.data.ganancia_diaria) || 0;
@@ -48,12 +57,13 @@ const Dashboard = () => {
                     ventasDelDia: parseFloat(ventasResponse.data.ventas_diarias) || 0,
                     ventasEfectivo: parseFloat(ventasResponse.data.ventas_efectivo) || 0,
                     ventasTransferencia: parseFloat(ventasResponse.data.ventas_transferencia) || 0,
-                    capitalInvertido: parseFloat(capitalResponse.data.capital_invertido) || 0,
-                    gananciaPotencial: parseFloat(gananciaPotencialResponse.data.ganancia_potencial) || 0,
+                    ventasMixto: parseFloat(ventasResponse.data.ventas_mixto) || 0,
+                    porcentajeTransferencia: parseFloat(ventasResponse.data.porcentaje_transferencia) || 0,
+                    promedioMensual: parseFloat(promedioMensualResponse.data.promedio_mensual) || 0,
+                    promedioDiaConVenta: parseFloat(promedioMensualResponse.data.promedio_dia_con_venta) || 0,
                     gananciaBrutaDiaria: ventasBrutaDiaria,
                     porcentajeGananciaBruta: porcentajeGananciaBruta,
                     gastosDiarios: parseFloat(gananciaDiariaResponse.data.gastos_diarios) || 0,
-                    inversionDiaria: parseFloat(gananciaDiariaResponse.data.inversion_diaria) || 0,
                     gananciaNetaDiaria: parseFloat(gananciaDiariaResponse.data.ganancia_neta_diaria) || 0,
                     porcentajeGananciaNeta: porcentajeGananciaNeta,
                     ventasSemana: ventasSemanaResponse.data
@@ -66,7 +76,7 @@ const Dashboard = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [selectedDate, selectedPaymentMethod]);
 
     if ((currentUser.role || '').toLowerCase() === 'asesor') {
         return (
@@ -83,6 +93,22 @@ const Dashboard = () => {
     return (
         <div className="dashboard-container">
             <h1 className="dashboard-header">Dashboard de la Droguería</h1>
+
+            <div className="dashboard-filters">
+                <label>
+                    Fecha de consulta
+                    <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+                </label>
+                <label>
+                    Método de pago
+                    <select value={selectedPaymentMethod} onChange={(event) => setSelectedPaymentMethod(event.target.value)}>
+                        <option value="">Todos</option>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Mixto">Mixto</option>
+                    </select>
+                </label>
+            </div>
             
             <div className="kpi-grid">
                 <div className="kpi-card">
@@ -96,6 +122,22 @@ const Dashboard = () => {
                 <div className="kpi-card">
                     <h2>Ventas Transferencia</h2>
                     <p>${dashboardData.ventasTransferencia}</p>
+                </div>
+                <div className="kpi-card">
+                    <h2>Ventas Mixtas</h2>
+                    <p>${dashboardData.ventasMixto}</p>
+                </div>
+                <div className="kpi-card">
+                    <h2>Promedio diario del mes</h2>
+                    <p>${dashboardData.promedioMensual}</p>
+                </div>
+                <div className="kpi-card">
+                    <h2>Promedio por día con venta</h2>
+                    <p>${dashboardData.promedioDiaConVenta}</p>
+                </div>
+                <div className="kpi-card">
+                    <h2>Porcentaje transferencia</h2>
+                    <p>{dashboardData.porcentajeTransferencia}%</p>
                 </div>
                 <div className="kpi-card">
                     <h2>Ganancia Bruta del Día</h2>
@@ -116,18 +158,6 @@ const Dashboard = () => {
                 <div className="kpi-card">
                     <h2>Ganancia Neta del Día</h2>
                     <p style={{color: '#28a745'}}>${dashboardData.gananciaNetaDiaria}</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Inversión del Día</h2>
-                    <p style={{color: '#6f42c1'}}>${dashboardData.inversionDiaria}</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Capital Invertido</h2>
-                    <p style={{color: '#ffc107'}}>${dashboardData.capitalInvertido}</p>
-                </div>
-                <div className="kpi-card">
-                    <h2>Ganancia Potencial</h2>
-                    <p style={{color: '#343a40'}}>${dashboardData.gananciaPotencial}</p>
                 </div>
             </div>
 

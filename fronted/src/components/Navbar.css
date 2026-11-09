@@ -4,8 +4,10 @@
     color: white;
     padding: 15px 30px;
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    gap: 12px 24px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
@@ -24,7 +26,9 @@
 .nav-links {
     list-style: none;
     display: flex;
-    gap: 25px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 24px;
     margin: 0;
     padding: 0;
 }
@@ -40,4 +44,48 @@
 .nav-links li a:hover {
     color: #fff;
     transform: translateY(-2px);
+}
+
+.nav-user {
+    color: #adb5bd;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.nav-action,
+.nav-logout {
+    padding: 6px 10px;
+    border: 1px solid #6c757d;
+    border-radius: 4px;
+    background: transparent;
+    color: #e9ecef;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.nav-action:hover:not(:disabled),
+.nav-logout:hover {
+    background: #495057;
+    border-color: #adb5bd;
+    color: #fff;
+}
+
+.nav-logout {
+    border-color: #dc3545;
+    color: #ffb3b8;
+}
+
+.nav-logout:hover {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.nav-action:disabled {
+    opacity: 0.6;
+    cursor: wait;
 }

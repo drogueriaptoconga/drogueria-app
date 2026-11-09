@@ -13,3 +13,11 @@ yarn-error.log*
 *.log
 *.sql
 backup_*.sql
+*.dump
+*.backup
+logs/
+
+# Scripts SQL del proyecto (sí se versionan; los respaldos siguen ignorados)
+!migrations/*.sql
+!supabase/*.sql
+!scripts/diagnostico-pre-supabase.sql

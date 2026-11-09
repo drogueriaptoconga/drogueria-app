@@ -149,6 +149,61 @@
   background: linear-gradient(135deg, #374151, #4b5563);
 }
 
+.entradas-card {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+}
+
+.entradas-unidades-card {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.reporte-detalle {
+  max-width: 1200px;
+  margin: 28px auto 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  padding: 20px;
+}
+
+.reporte-detalle h2 {
+  margin: 0 0 18px;
+  color: #0f172a;
+}
+
+.tabla-wrapper {
+  overflow-x: auto;
+}
+
+.tabla-entradas {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.tabla-entradas th,
+.tabla-entradas td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.tabla-entradas th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+}
+
+.tabla-entradas tbody tr:hover {
+  background: #f8fafc;
+}
+
+.empty-state {
+  color: #64748b;
+  font-style: italic;
+}
+
 .disclaimer {
   max-width: 1200px;
   margin: 28px auto 0;

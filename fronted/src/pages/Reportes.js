@@ -43,6 +43,9 @@ const Reportes = () => {
     });
     const [resumen, setResumen] = useState({
         totalIngresos: 0,
+        ventasEfectivo: 0,
+        ventasTransferencia: 0,
+        ventasMixto: 0,
         totalGastos: 0,
         totalGananciaBruta: 0,
         totalInversionEntradas: 0,
@@ -51,6 +54,12 @@ const Reportes = () => {
         porcentajeGananciaBruta: 0,
         porcentajeGananciaNeta: 0,
     });
+    const [entradas, setEntradas] = useState({
+        totalProductos: 0,
+        totalUnidades: 0,
+        totalInversion: 0,
+    });
+    const [detalleEntradas, setDetalleEntradas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -63,13 +72,27 @@ const Reportes = () => {
             if (nextFilters.startDate) params.append('startDate', nextFilters.startDate);
             if (nextFilters.endDate) params.append('endDate', nextFilters.endDate);
 
-            const response = await axios.get(`http://localhost:3001/api/reportes/resumen?${params.toString()}`, {
-                headers: getAuthHeaders(),
-            });
+            const [resumenResponse, entradasResponse, detalleEntradasResponse] = await Promise.all([
+                axios.get(`http://localhost:3001/api/reportes/resumen?${params.toString()}`, {
+                    headers: getAuthHeaders(),
+                }),
+                axios.get(`http://localhost:3001/api/reportes/entradas?${params.toString()}`, {
+                    headers: getAuthHeaders(),
+                }),
+                axios.get(`http://localhost:3001/api/reportes/entradas-detalle?${params.toString()}`, {
+                    headers: getAuthHeaders(),
+                })
+            ]);
 
-            const data = response.data || {};
+            const data = resumenResponse.data || {};
+            const entradaData = entradasResponse.data || {};
+            const detalleData = Array.isArray(detalleEntradasResponse.data) ? detalleEntradasResponse.data : [];
+
             setResumen({
                 totalIngresos: Number(data.totalIngresos) || 0,
+                ventasEfectivo: Number(data.ventasEfectivo) || 0,
+                ventasTransferencia: Number(data.ventasTransferencia) || 0,
+                ventasMixto: Number(data.ventasMixto) || 0,
                 totalGastos: Number(data.totalGastos) || 0,
                 totalGananciaBruta: Number(data.totalGananciaBruta) || 0,
                 totalInversionEntradas: Number(data.totalInversionEntradas) || 0,
@@ -78,6 +101,14 @@ const Reportes = () => {
                 porcentajeGananciaBruta: Number(data.porcentajeGananciaBruta) || 0,
                 porcentajeGananciaNeta: Number(data.porcentajeGananciaNeta) || 0,
             });
+
+            setEntradas({
+                totalProductos: Number(entradaData.totalProductos) || 0,
+                totalUnidades: Number(entradaData.totalUnidades) || 0,
+                totalInversion: Number(entradaData.totalInversion) || 0,
+            });
+
+            setDetalleEntradas(detalleData);
         } catch (err) {
             setError('Error al cargar el reporte financiero. Por favor, intente de nuevo.');
             console.error(err);
@@ -156,6 +187,18 @@ const Reportes = () => {
                     <h3>Ingresos</h3>
                     <p className="monto">{formatCurrency(resumen.totalIngresos)}</p>
                 </div>
+                <div className="card efectivo-card">
+                    <h3>Ventas en efectivo</h3>
+                    <p className="monto">{formatCurrency(resumen.ventasEfectivo)}</p>
+                </div>
+                <div className="card transferencia-card">
+                    <h3>Ventas por transferencia</h3>
+                    <p className="monto">{formatCurrency(resumen.ventasTransferencia)}</p>
+                </div>
+                <div className="card transferencia-card">
+                    <h3>Ventas mixtas</h3>
+                    <p className="monto">{formatCurrency(resumen.ventasMixto)}</p>
+                </div>
                 <div className="card gastos-card">
                     <h3>Gastos</h3>
                     <p className="monto">{formatCurrency(resumen.totalGastos)}</p>
@@ -184,6 +227,50 @@ const Reportes = () => {
                     <h3>Capital invertido</h3>
                     <p className="monto">{formatCurrency(resumen.totalCapitalInvertido)}</p>
                 </div>
+                <div className="card entradas-card">
+                    <h3>Productos ingresados</h3>
+                    <p className="monto">{entradas.totalProductos}</p>
+                </div>
+                <div className="card entradas-unidades-card">
+                    <h3>Unidades ingresadas</h3>
+                    <p className="monto">{entradas.totalUnidades}</p>
+                </div>
+            </div>
+
+            <div className="reporte-detalle">
+                <h2>Detalle de productos ingresados</h2>
+                {detalleEntradas.length === 0 ? (
+                    <p className="empty-state">No se registraron productos con entrada en este rango de fechas.</p>
+                ) : (
+                    <div className="tabla-wrapper">
+                        <table className="tabla-entradas">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Producto</th>
+                                    <th>Código</th>
+                                    <th>Cantidad</th>
+                                    <th>Costo/U</th>
+                                    <th>Inversión</th>
+                                    <th>Usuario</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {detalleEntradas.map((entrada) => (
+                                    <tr key={entrada.id}>
+                                        <td>{formatDate(entrada.fecha_entrada)}</td>
+                                        <td>{entrada.nombre_producto || 'Sin nombre'}</td>
+                                        <td>{entrada.codigo_producto || 'N/A'}</td>
+                                        <td>{entrada.cantidad_entrada}</td>
+                                        <td>{formatCurrency(entrada.costo_unidad_entrada)}</td>
+                                        <td>{formatCurrency(entrada.inversion_total)}</td>
+                                        <td>{entrada.usuario_nombre || 'Sistema'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             <div className="disclaimer">

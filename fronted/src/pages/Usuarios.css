@@ -1,0 +1,74 @@
+.users-page {
+    width: min(100% - 32px, 1000px);
+    margin: 24px auto;
+}
+
+.users-page h1,
+.users-page h2 {
+    color: #173c31;
+}
+
+.users-form {
+    max-width: 520px;
+    display: grid;
+    gap: 10px;
+    padding: 20px 0 24px;
+    border-bottom: 1px solid #d3ddd7;
+}
+
+.users-form h2,
+.users-form p {
+    margin: 0;
+}
+
+.users-form label {
+    font-weight: 600;
+}
+
+.users-form input {
+    min-height: 40px;
+    padding: 8px;
+    border: 1px solid #9aaba1;
+    border-radius: 4px;
+    font: inherit;
+}
+
+.users-form button,
+.users-list button {
+    min-height: 38px;
+    padding: 6px 12px;
+    border: 0;
+    border-radius: 4px;
+    background: #17684d;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+}
+
+.users-form p {
+    color: #56665d;
+}
+
+.users-error {
+    color: #a12121 !important;
+}
+
+.users-message {
+    color: #17684d !important;
+}
+
+.users-list {
+    overflow-x: auto;
+}
+
+.users-list table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.users-list th,
+.users-list td {
+    padding: 10px;
+    border-bottom: 1px solid #d3ddd7;
+    text-align: left;
+}

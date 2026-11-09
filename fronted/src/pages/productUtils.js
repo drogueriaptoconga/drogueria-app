@@ -2,7 +2,7 @@ export const calculateMargin = (costo, precio) => {
     const c = parseFloat(costo);
     const p = parseFloat(precio);
     if (!isNaN(c) && !isNaN(p) && p > 0) {
-        return (((p - c) / p) * 100).toFixed(2);
+        return Math.max(0, ((p - c) / p) * 100).toFixed(2);
     }
     return '';
 };

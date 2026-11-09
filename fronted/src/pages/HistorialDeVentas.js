@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './HistorialDeVentas.css';
 import { getCurrentUser, getAuthHeaders } from '../auth';
@@ -6,6 +6,7 @@ import { getCurrentUser, getAuthHeaders } from '../auth';
 const HistorialDeVentas = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('');
     const [sales, setSales] = useState([]);
     const [totalSales, setTotalSales] = useState(0);
     const [totalProfit, setTotalProfit] = useState(0);
@@ -16,11 +17,12 @@ const HistorialDeVentas = () => {
 
     const currentUser = getCurrentUser();
 
-    const fetchSales = async (start, end) => {
+    const fetchSales = useCallback(async (start, end) => {
         try {
             const params = {};
             if (start) params.startDate = start;
             if (end) params.endDate = end;
+            if (paymentMethod) params.metodo_pago = paymentMethod;
 
             // add auth headers so backend can enforce role checks
             const response = await axios.get(`http://localhost:3001/api/historial/ventas_detallado`, { params, headers: getAuthHeaders() });
@@ -36,11 +38,11 @@ const HistorialDeVentas = () => {
             console.error('Error al obtener el historial de ventas:', error);
             alert('Error al obtener el historial de ventas. Por favor, inténtalo de nuevo.');
         }
-    };
+    }, [paymentMethod]);
 
     useEffect(() => {
         fetchSales();
-    }, []);
+    }, [fetchSales]);
 
     const handleSearch = () => {
         fetchSales(startDate, endDate);
@@ -105,13 +107,22 @@ const HistorialDeVentas = () => {
                     <label>Fecha de fin:</label>
                     <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </div>
+                <div className="filter-item">
+                    <label>Método de pago:</label>
+                    <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                        <option value="">Todos</option>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia</option>
+                        <option value="Mixto">Mixto</option>
+                    </select>
+                </div>
                 <button onClick={handleSearch}>Buscar</button>
             </div>
             
             <div className="summary-section">
                 <span>Ventas Encontradas: {sales.length}</span>
-                <span>Total Vendido: ${parseFloat(totalSales) || 0}</span>
-                <span>Ganancia Total: ${parseFloat(totalProfit) || 0}</span>
+                <span>Total Vendido: ${Math.max(0, parseFloat(totalSales) || 0)}</span>
+                <span>Ganancia Total: ${Math.max(0, parseFloat(totalProfit) || 0)}</span>
                 <span>Rol actual: {currentUser.role}</span>
             </div>
             {feedback && (
@@ -140,14 +151,22 @@ const HistorialDeVentas = () => {
                                 const isCanceled = !!sale.anulado;
                                 const statusText = sale.estado || (isCanceled ? 'ANULADA' : 'ACTIVA');
 
-                                const saleProfit = parseFloat(sale.ganancia_por_venta) || 0;
+                                const saleProfit = Math.max(0, parseFloat(sale.ganancia_por_venta) || 0);
 
                                 return (
                                     <tr key={sale.id} className={isCanceled ? 'sale-canceled' : ''}>
                                         <td>{sale.id}</td>
                                         <td>{new Date(sale.fecha_venta).toLocaleString()}</td>
-                                        <td>{sale.metodo_pago}</td>
-                                        <td>${parseFloat(sale.monto_total) || 0}</td>
+                                        <td>
+                                            <strong>{sale.metodo_pago}</strong>
+                                            {Number(sale.monto_efectivo) > 0 && (
+                                                <div className="cancel-info">Efectivo: ${Number(sale.monto_efectivo).toLocaleString('es-CO')}</div>
+                                            )}
+                                            {Number(sale.monto_transferencia) > 0 && (
+                                                <div className="cancel-info">Transferencia: ${Number(sale.monto_transferencia).toLocaleString('es-CO')}</div>
+                                            )}
+                                        </td>
+                                        <td>${Math.max(0, parseFloat(sale.monto_total) || 0)}</td>
                                         <td>${saleProfit}</td>
                                         <td>
                                             <div>{statusText}</div>
@@ -162,9 +181,9 @@ const HistorialDeVentas = () => {
                                             <ul className="product-list">
                                                 {sale.productos.map((product, index) => (
                                                     <li key={index}>
-                                                        {product.nombre_producto} (x{product.cantidad}) - ${product.precio_unitario} c/u
+                                                        {product.codigo_producto || 'Sin código'} - {product.nombre_producto} (x{product.cantidad}) - ${product.precio_unitario} c/u
                                                         {typeof product.ganancia_linea !== 'undefined' && (
-                                                            <div className="cancel-info">Ganancia línea: ${parseFloat(product.ganancia_linea).toFixed(2)}</div>
+                                                            <div className="cancel-info">Ganancia línea: ${Math.max(0, parseFloat(product.ganancia_linea) || 0).toFixed(2)}</div>
                                                         )}
                                                     </li>
                                                 ))}

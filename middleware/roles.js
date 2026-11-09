@@ -1,17 +1,23 @@
-// middleware/roles.js
+function requireRole(...allowedRoles) {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Debes iniciar sesión.' });
+        }
+
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'No tienes permisos para realizar esta acción.' });
+        }
+
+        next();
+    };
+}
+
+const requireAdmin = requireRole('admin');
+const requireSellerOrAdmin = requireRole('admin', 'vendedor');
+
 module.exports = {
-    denyIfAsesor: (req, res, next) => {
-        const role = (req.get('x-user-role') || '').toLowerCase();
-        if (role === 'asesor') {
-            return res.status(403).json({ error: 'Acceso denegado.' });
-        }
-        next();
-    },
-    requireAdmin: (req, res, next) => {
-        const role = (req.get('x-user-role') || '').toLowerCase();
-        if (role !== 'admin') {
-            return res.status(403).json({ error: 'Se requieren privilegios de administrador.' });
-        }
-        next();
-    }
+    requireRole,
+    requireAdmin,
+    requireSellerOrAdmin,
+    denyIfAsesor: requireAdmin
 };
