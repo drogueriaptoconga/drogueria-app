@@ -558,5 +558,73 @@ Copia este bloque al final del archivo y complétalo:
 - La causa raÃ­z del fallo en producciÃ³n puede ser: (a) la clienta logueada como vendedor (Dashboard es solo admin), (b) un error de red/CORS si la app estÃ¡ expuesta por tÃºnel, o (c) un endpoint que falla por datos especÃ­ficos de producciÃ³n. La correcciÃ³n de robustez (Promise.allSettled) mitiga el caso (c).
 - La columna "Acciones" ahora estÃ¡ junto a "Estado", mÃ¡s visible.
 
+---
+### 2026-11-09 — OpenCode — Montaje en mÃ¡quina de desarrollo (esta sesiÃ³n)
+
+**Objetivo:** clonar, instalar, restaurar base local, crear .env, aplicar migraciones y arrancar backend + frontend para dejar el flujo listo para desarrollar.
+
+**Cambios:**
+- `C:\Users\capde\drogueria-app`: repo clonado (rama `main`, actualizado con `origin/main`, commit `6e9fc2b`).
+- `.env`: creado con `DB_*` locales (`DB_PASSWORD=lauren20`), `DB_SSL=false`, `SUPABASE_SYNC_ENABLED=false`, `SUPABASE_DATABASE_URL` comentado (pendiente de password de Supabase). `.env` estÃ¡ ignorado por git (no se versiona).
+- `package-lock.json`: modificado por `npm install` (backend y frontend).
+
+**Base de datos local:**
+- Password del rol `postgres` reseteado a `lauren20` (script ejecutado por el usuario como administrador de Windows; pg_hba.conf restaurado a su estado original despuÃ©s).
+- Base `drogueria_app` dropeada, recreada y restaurada desde `C:\Users\capde\Downloads\dumb drogeuria\drogueria_app_para_dev.dump`.
+- Conteos verificados: usuarios 3, productos 2.364, ventas 5.024, detalle_venta 7.788, entradas_stock 1.055, gastos 13. Coincide con el estado esperado.
+
+**Migraciones:**
+- `npm run db:migrate:local` â†ª `SKIP 20261108_users_security.sql` (el dump ya la trae).
+
+**Arranque y verificaciÃ³n:**
+- Backend (nodemon, puerto 3001): `http://localhost:3001/api/test` responde `200`.
+- Frontend (npm start, puerto 3000): `http://localhost:3000` responde `200` (carga el login).
+- `git status`: limpio salvo `package-lock.json` (por npm install) y `.env` (ignorado).
+
+**Comandos ejecutados:**
+- `git clone https://github.com/drogueriaptoconga/drogueria-app.git`
+- `npm install` (raÃ­z) y `npm install --legacy-peer-deps` (fronted)
+- `dropdb` / `createdb` / `pg_restore --no-owner --no-privileges` (base local)
+- `npm run db:migrate:local` â†ª SKIP
+- `npm run dev` (backend) y `npm start` (frontend)
+
+**Sin probar:**
+- Login manual en navegador como `Admin` (pendiente de que el usuario entre con su clave real).
+- Flujo completo de venta / entrada / traslado.
+- `npm run db:migrate:supabase` (falta `SUPABASE_DATABASE_URL` / password de Supabase).
+- `npm run db:supabase:sync`: **NO ejecutado** (prohibido en desarrollo, `SUPABASE_SYNC_ENABLED=false`).
+- Tests que escriben en BD (`node --test test`).
+
+**Riesgos / notas:**
+- No se crearon usuarios, no se cambiaron contraseñas, no se modificaron datos sin autorizaciÃ³n.
+- El Admin ya tiene su clave definitiva; no se tocÃ³.
+- vendedor1 y vendedor2 deben cambiar su clave en el primer ingreso (`debe_cambiar_contrasena = TRUE`).
+- `SUPABASE_DATABASE_URL` queda comentado; si se consigue el password de Supabase, agregarlo al `.env` y correr `npm run db:migrate:supabase`.
+- No se escribiÃ³ directamente en Supabase.
+
+**Siguiente paso:** que el usuario entre a http://localhost:3000 como `Admin` y verifique el login; luego, si se consigue el password de Supabase, completar `SUPABASE_DATABASE_URL` en `.env` y aplicar migraciones a Supabase.
+
 **Siguiente paso:** enviar los cambios a producciÃ³n vÃ­a Git (`git add/commit/push`), luego en producciÃ³n hacer `git pull`, `npm install` si cambiÃ³ package.json, reiniciar backend/frontend. Probar con la clienta.
+
+---
+### 2026-11-12 — OpenCode — Desactivar tope de 8 horas en sesiones
+
+**Objetivo:** eliminar el tiempo de expiración de sesiones (8 horas) porque el vendedor se quedaba bloqueado después de varias horas de trabajo.
+
+**Cambios:**
+- `middleware/authentication.js`: `SESSION_TTL_MS` cambiado de `8 * 60 * 60 * 1000` (8 horas) a `30 * 24 * 60 * 60 * 1000` (30 días). Las sesiones ya no expiran al cabo de 8 horas; solo se cierran al reiniciar el backend o al cerrar sesión manualmente.
+
+**Comandos ejecutados:**
+- `node --check middleware/authentication.js` → OK
+- Backend levantado temporalmente para verificar `http://localhost:3001/api/test` → 200 OK
+
+**Sin probar:**
+- Login manual prolongado para verificar que no expire antes de 30 días.
+- Despliegue en producción (pendiente de `git pull` en la máquina de la cliente).
+
+**Riesgos / notas:**
+- Las sesiones siguen viviendo en memoria del backend; si el backend se reinicia (actualización por Git, apagón, reinicio de PC), todas las sesiones se borran y hay que volver a hacer login. Para evitar eso sería necesario pasar las sesiones a la base de datos.
+- Este cambio se envía por Git; en producción debe aplicarse con el botón/scripts de actualizar.
+
+**Siguiente paso:** `git add/commit/push` y luego en producción ejecutar la actualización.
 '
